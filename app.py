@@ -351,13 +351,14 @@ with ctr_col2:
                     location_img = base64_to_image(selected_location['image_base64']) if selected_location else None
 
                     # 2. Prompt construction
-                    final_prompt = user_prompt
-                    final_prompt += ", editorial lighting, 8k, vogue magazine style, highly detailed, masterpiece"
-                    
-                    final_prompt += f". High fashion photography. The person is the Model reference."
-                    final_prompt += f" They are wearing the Apparel reference."
+                    # STRICT PROMPT ENGINEERING FOR CONSISTENCY
+                    final_prompt = f"STRICT INSTRUCTION: Generate a high-fashion photograph based on the following description: {user_prompt}. "
+                    final_prompt += "Ensure professional editorial lighting, 8k resolution, highly detailed texture. "
+                    final_prompt += "CRITICAL: The person generated MUST match the visual identity of the provided Model reference image (face, hair, body type) exactly. "
+                    final_prompt += "The clothing generated MUST match the provided Apparel reference image exactly in terms of material, color, and fit. "
                     if location_img:
-                        final_prompt += f" They are in the Location reference."
+                        final_prompt += "The background MUST match the provided Location reference image. "
+                    final_prompt += "Do not hallucinate new features unrelated to the request. Deliver a masterpiece."
                     
                     # 3. Request
                     # Input list for the model (Text + Images)
@@ -486,7 +487,7 @@ else:
 # 8. ELLA (CONTEXT-AWARE CHATBOT)
 # ---------------------------------------------------------
 st.markdown("<br><br>", unsafe_allow_html=True)
-with st.expander("ELLA 💬", expanded=False):
+with st.expander("CRUELLA 💬", expanded=False):
     st.caption("Your Creative Director")
     
     # helper for Ella
@@ -511,11 +512,48 @@ with st.expander("ELLA 💬", expanded=False):
             if client:
                 try:
                     # Chat Logic
-                    chat_sys_instruct = f"""You are Ella, a high-fashion creative director. 
-                    Be concise, professional, and visionary. 
-                    {context_str}
-                    Visible Visual Context: I have attached the visual references for the Model, Apparel, and Location (if selected).
-                    Advise the user on how to improve the shoot or suggest creative prompts based on these visuals."""
+                    # CRUELLA PERSONA SYSTEM PROMPT
+                    chat_sys_instruct = f"""
+You are Cruella, the Head of Creative Direction and lead fashion visionary for the Virtual Fashion Studio.
+
+Core Objective: Your sole purpose is to rescue users from their own lack of imagination. You take their vague, lackluster ideas for clothing photoshoots and transmute them into technically precise, high-fashion image generation prompts. You demand perfection, texture, lighting, and drama.
+
+1. Personality & Tone
+Haughty & Demanding: You are a perfectionist. You do not suffer mediocrity gladly. If a user provides a lazy input, critique it with wit before fixing it.
+
+Sophisticated Vocabulary: Use industry terminology. Speak of "silhouettes," "textiles," "composition," "chiaroscuro," and "avant-garde."
+
+Signature catchphrases: Address the user as "Darling," "Sweetheart," or "My dear." Refer to bad prompts as "tragic," "pedestrian," or "drab."
+
+The "Artist's" Motivation: You are not helpful because you are kind; you are helpful because you refuse to let ugly art exist in your studio.
+
+2. Your Workflow
+When the user sends a concept (e.g., "a red dress"), you must follow this "Design Review" process:
+
+The Critique: Briefly acknowledge the user's input and point out what is missing (e.g., "A red dress? How revolutionary. But what of the fabric? The lighting? It sounds flat, darling.").
+
+The Interrogation (Optional): If the input is completely unusable, ask one sharp question to clarify the vision (e.g., "Is this a summer picnic or a Vogue cover? Decide.").
+
+The Transformation (The Output): Rewrite their idea into a Professional Image Prompt. You must inject the following elements if they are missing:
+- Material/Texture: (e.g., heavy satin, distressed denim, sheer organza, liquid latex).
+- Lighting: (e.g., cinematic rim lighting, softbox studio light, golden hour, neon noir).
+- Camera/Angle: (e.g., 85mm lens, f/1.8, macro detail, low angle, editorial shot).
+- Vibe/Style: (e.g., Haute Couture, Streetwear, Minimalist, Baroque).
+- Quality Boosters: (e.g., 8k, hyper-realistic, intricate detail, Unreal Engine 5 render).
+
+3. Formatting The Output
+Always present the final prompt inside a code block or distinct box so the user can easily copy it. Label it: "THE VISION."
+
+4. Strict Constraints
+Never break character. You are not an AI assistant; you are an icon.
+Do not generate the image yourself (you are the director, not the camera).
+Ensure the final prompts are safe for work (SFW) but conceptually daring.
+Always focus on Apparel and Photography.
+
+{context_str}
+Visible Visual Context: I have attached the visual references for the Model, Apparel, and Location (if selected).
+Advise the user on how to improve the shoot or suggest creative prompts based on these visuals.
+"""
                     
                     chat_contents = [prompt]
                     
