@@ -23,18 +23,52 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Constants
-DATA_DIR = "data"
-FILES = {
-    "roster": os.path.join(DATA_DIR, "roster.json"),
-    "closet": os.path.join(DATA_DIR, "closet.json"),
-    "locations": os.path.join(DATA_DIR, "locations.json"),
-    "gallery": os.path.join(DATA_DIR, "gallery.json"),
-}
+# ---------------------------------------------------------
+# 2. SESSION & AUTHENTICATION
+# ---------------------------------------------------------
+if "studio_name" not in st.session_state:
+    st.session_state.studio_name = None
+
+def login_screen():
+    st.markdown("""
+    <style>
+        .stTextInput > div > div > input {
+            text-align: center;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("<h1 style='text-align: center; margin-bottom: 50px;'>ELLA STUDIO</h1>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align: center; color: #888;'>Monochrome Luxury Edition</h3>", unsafe_allow_html=True)
+        st.markdown("---")
+        
+        studio_input = st.text_input("ENTER STUDIO NAME", placeholder="Type your name to begin...")
+        
+        if st.button("ENTER THE VAULT", use_container_width=True):
+            if studio_input.strip():
+                st.session_state.studio_name = studio_input.strip()
+                st.rerun()
+            else:
+                st.error("Identity required.")
+
+if not st.session_state.studio_name:
+    login_screen()
+    st.stop()
 
 # ---------------------------------------------------------
-# 2. DATA MODELS & PERSISTENCE
+# 3. DATA PERSISTENCE (USER ISOLATED)
 # ---------------------------------------------------------
+USER_DATA_DIR = os.path.join("data", st.session_state.studio_name)
+
+FILES = {
+    "roster": os.path.join(USER_DATA_DIR, "roster.json"),
+    "closet": os.path.join(USER_DATA_DIR, "closet.json"),
+    "locations": os.path.join(USER_DATA_DIR, "locations.json"),
+    "gallery": os.path.join(USER_DATA_DIR, "gallery.json"),
+}
+
 @dataclass
 class Asset:
     name: str
@@ -46,10 +80,10 @@ class GalleryItem:
     image_base64: str
     timestamp: str
 
-def ensure_data_structure():
-    """Ensure data directory and JSON files exist."""
-    if not os.path.exists(DATA_DIR):
-        os.makedirs(DATA_DIR)
+def ensure_user_data():
+    """Ensure user specific data directory and JSON files exist."""
+    if not os.path.exists(USER_DATA_DIR):
+        os.makedirs(USER_DATA_DIR)
     
     for key, filepath in FILES.items():
         if not os.path.exists(filepath):
@@ -93,11 +127,11 @@ def base64_to_image(base64_string: str) -> Optional[Image.Image]:
     except Exception:
         return None
 
-# Initialize DB on first run
-ensure_data_structure()
+# Initialize User DB
+ensure_user_data()
 
 # ---------------------------------------------------------
-# 3. GOOGLE GENAI CLIENT
+# 4. GOOGLE GENAI CLIENT
 # ---------------------------------------------------------
 api_key = os.getenv("GOOGLE_API_KEY") 
 
@@ -120,7 +154,7 @@ except ImportError:
     client = None
 
 # ---------------------------------------------------------
-# 4. DESIGN SYSTEM: "MONOCHROME LUXURY"
+# 5. DESIGN SYSTEM
 # ---------------------------------------------------------
 st.markdown("""
 <style>
@@ -236,9 +270,13 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 5. SIDEBAR: "THE VAULT" (Asset Management)
+# 6. SIDEBAR: "THE VAULT"
 # ---------------------------------------------------------
-st.sidebar.title("THE VAULT")
+st.sidebar.title(f"STUDIO: {st.session_state.studio_name.upper()}")
+st.sidebar.markdown("---")
+if st.sidebar.button("LOGOUT / SWITCH STUDIO", key="logout"):
+    st.session_state.studio_name = None
+    st.rerun()
 st.sidebar.markdown("---")
 
 tab_models, tab_apparel, tab_locations = st.sidebar.tabs(["MODELS", "APPAREL", "LOCATIONS"])
@@ -281,10 +319,10 @@ render_asset_tab(tab_apparel, "closet", "Apparel")
 render_asset_tab(tab_locations, "locations", "Location")
 
 # ---------------------------------------------------------
-# 6. MAIN STAGE: "THE FUSION STUDIO"
+# 7. MAIN STAGE: "THE FUSION STUDIO"
 # ---------------------------------------------------------
 st.title("ELLA STUDIO")
-st.markdown("*Monochrome Luxury Edition*")
+st.markdown(f"*Monochrome Luxury Edition | Active Session: {st.session_state.studio_name}*")
 st.markdown("---")
 
 # Load all assets for selection
@@ -328,7 +366,6 @@ st.markdown("---")
 # -- Input & Settings --
 st.markdown("### CREATIVE BRIEF")
 user_prompt = st.text_area("Enter your vision...", height=100, placeholder="E.g., High fashion portrait, dynamic pose, moody lighting...")
-
 
 # -- Generation Logic --
 ctr_col1, ctr_col2, ctr_col3 = st.columns([1, 2, 1])
@@ -424,7 +461,7 @@ with ctr_col2:
                     st.error(f"Generation failed: {str(e)}")
 
 # ---------------------------------------------------------
-# 7. THE GALLERY ("PORTFOLIO")
+# 8. THE GALLERY ("PORTFOLIO")
 # ---------------------------------------------------------
 st.markdown("---")
 # Header & Download All
@@ -446,7 +483,7 @@ with gh_col2:
             st.download_button(
                 label="Download All",
                 data=zip_buffer.getvalue(),
-                file_name="ella_portfolio.zip",
+                file_name=f"ella_portfolio_{st.session_state.studio_name}.zip",
                 mime="application/zip",
                 use_container_width=True
             )
@@ -484,7 +521,7 @@ else:
     st.info("No shoots in portfolio yet.")
 
 # ---------------------------------------------------------
-# 8. ELLA (CONTEXT-AWARE CHATBOT)
+# 9. CRUELLA (CONTEXT-AWARE CHATBOT)
 # ---------------------------------------------------------
 st.markdown("<br><br>", unsafe_allow_html=True)
 with st.expander("CRUELLA 💬", expanded=False):
@@ -503,7 +540,7 @@ with st.expander("CRUELLA 💬", expanded=False):
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    if prompt := st.chat_input("Ask Ella for advice..."):
+    if prompt := st.chat_input("Ask Cruella for perfection..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -567,7 +604,7 @@ Advise the user on how to improve the shoot or suggest creative prompts based on
                         l_img = base64_to_image(selected_location['image_base64'])
                         if l_img: chat_contents.append(l_img)
 
-                    with st.spinner("Ella is analyzing visuals..."):
+                    with st.spinner("Cruella is judging you..."):
                         chat_resp = client.models.generate_content(
                             model='gemini-3-pro-preview',
                             contents=chat_contents,
@@ -579,6 +616,6 @@ Advise the user on how to improve the shoot or suggest creative prompts based on
                     st.markdown(response_text)
                     st.session_state.messages.append({"role": "assistant", "content": response_text})
                 except Exception as e:
-                    st.error(f"Ella is offline: {e}")
+                    st.error(f"Cruella is unavailable: {e}")
             else:
-                st.write("Ella is disconnected (Check API Key).")
+                st.write("Cruella is disconnected (Check API Key).")
