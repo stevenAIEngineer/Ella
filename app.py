@@ -440,12 +440,11 @@ with act_col:
                     final_prompt += "\n\nVISUAL INPUT MAPPING (Critical Compliance Required):"
                     img_count = 1
                     if model_img:
-                        final_prompt += f"\n- Image {img_count}: MODEL IDENTITY REFERENCE. "
-                        final_prompt += "This image establishes the person's face and physical characteristics. "
-                        final_prompt += "If it is a character sheet (multiple angles), IGNORE the grid layout and clothes. "
-                        final_prompt += "CRITICALLY FOCUS on the facial features (eyes, nose, jawline) and skin texture. "
-                        final_prompt += "The generated subject MUST look exactly like this person. Do not blend features. "
-                        final_prompt += "Generate a SINGLE person, not a grid."
+                        final_prompt += f"\n- Image {img_count}: PRIMARY SOURCE IMAGE (Model). "
+                        final_prompt += "Treat this image as the ground truth for the subject's physical appearance. "
+                        final_prompt += "Extract the facial geometry, skin tone, and body proportions directly from this reference. "
+                        final_prompt += "If it is a character sheet, IGNORE the grid layout but synthesize the angles for perfect identity consistency. "
+                        final_prompt += "Target Identity adherence: 100%. "
                         img_count += 1
                     if apparel_img:
                         final_prompt += f"\n- Image {img_count}: APPAREL REFERENCE. You MUST reproduce the clothing (material, cut, color, texture) exactly as shown. Ease fit onto the model naturally."
