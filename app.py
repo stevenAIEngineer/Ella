@@ -287,9 +287,6 @@ def render_asset_tab(tab_name, data_key, label_singular):
     with tab_name:
         # Upload
         with st.expander(f"Upload New {label_singular}", expanded=False):
-            if data_key == "roster":
-                st.info("💡 **Pro Tip:** For best consistency, upload a **Character Sheet**. Combine 3 close-ups (different angles) and 3 full-body shots into a single 4K image.")
-            
             new_name = st.text_input(f"Name", key=f"name_{data_key}")
             new_file = st.file_uploader(f"Image", type=['png', 'jpg', 'jpeg'], key=f"file_{data_key}")
             
@@ -413,40 +410,33 @@ with act_col:
             with st.spinner("Compiling scene..."):
                 try:
                     # 1. Image preparation & Optimization
-                    def load_and_resize(b64_str, target_size=1024):
+                    def load_and_resize(b64_str):
                         if not b64_str: return None
                         img = base64_to_image(b64_str)
                         if img:
-                            # Convert to RGB
+                            # Convert to RGB (Remove Alpha Channel if present, as it can cause 500s)
                             if img.mode != 'RGB':
                                 img = img.convert('RGB')
-                            # Reduce size to avoid 500 errors, but maintain enough for face details
-                            img.thumbnail((target_size, target_size))
+                            # Resize to max 800px to be safe
+                            img.thumbnail((800, 800))
                         return img
 
-                    # Allow higher res for Model to support Character Sheets (multiple angles)
-                    model_img = load_and_resize(selected_model['image_base64'], target_size=1536) 
-                    apparel_img = load_and_resize(selected_apparel['image_base64'], target_size=1024)
-                    location_img = load_and_resize(selected_location['image_base64'], target_size=1024) if selected_location else None
+                    model_img = load_and_resize(selected_model['image_base64'])
+                    apparel_img = load_and_resize(selected_apparel['image_base64'])
+                    location_img = load_and_resize(selected_location['image_base64']) if selected_location else None
 
                     # 2. Prompt construction
                     # STRICT PROMPT ENGINEERING FOR CONSISTENCY
                     final_prompt = f"STRICT INSTRUCTION: Generate a high-fashion photograph based on the following description: {user_prompt}. "
                     final_prompt += f" Aspect Ratio: {selected_ar}. "
                     final_prompt += f" Target Resolution: {resolution.split('(')[0].strip().upper()}. "
-                    final_prompt += "LIGHTING & ATMOSPHERE: Use bright, soft, professional commercial fashion lighting. "
-                    final_prompt += "Ensure the model and apparel are fully illuminated and sharp to highlight the fabric details. Avoid heavy shadows. "
-                    final_prompt += "QUALITY: 8k resolution, highly detailed, photorealistic, commercial catalog standard. "
+                    final_prompt += "Ensure professional editorial lighting, 8k resolution, highly detailed texture. "
                     
                     # Explicit Input Mapping
                     final_prompt += "\n\nVISUAL INPUT MAPPING (Critical Compliance Required):"
                     img_count = 1
                     if model_img:
-                        final_prompt += f"\n- Image {img_count}: PRIMARY SOURCE IMAGE (Model). "
-                        final_prompt += "Treat this image as the ground truth for the subject's physical appearance. "
-                        final_prompt += "Extract the facial geometry, skin tone, and body proportions directly from this reference. "
-                        final_prompt += "If it is a character sheet, IGNORE the grid layout but synthesize the angles for perfect identity consistency. "
-                        final_prompt += "Target Identity adherence: 100%. "
+                        final_prompt += f"\n- Image {img_count}: MODEL REFERENCE. You MUST reproduce the face, hair, and body type of this person exactly. Do not alter their identity."
                         img_count += 1
                     if apparel_img:
                         final_prompt += f"\n- Image {img_count}: APPAREL REFERENCE. You MUST reproduce the clothing (material, cut, color, texture) exactly as shown. Ease fit onto the model naturally."
@@ -459,7 +449,7 @@ with act_col:
                     final_prompt += "\n1. Fuse these elements perfectly. The Model (Image 1) wearing the Apparel (Image 2) in the Location (Image 3)."
                     final_prompt += "\n2. Do NOT change the model's ethnicity or key facial features."
                     final_prompt += "\n3. Do NOT change the garment's design or fabric."
-                    final_prompt += "\n4. CONSISTENCY IS PARAMOUNT. The generated image must strictly adhere to the Model, Apparel, and Location references. No stylistic deviations."
+                    final_prompt += "\n4. Deliver a photorealistic, Vogue-quality masterpiece."
                     
                     # 3. Request
                     # Input list for the model (Text + Images)
