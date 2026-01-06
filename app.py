@@ -209,8 +209,9 @@ st.markdown("""
     
     /* INPUT FIELDS */
     .stTextInput > div > div > input, .stTextArea > div > div > textarea {
-        background-color: transparent;
-        color: var(--text-color);
+        background-color: var(--bg-color) !important;
+        color: var(--text-color) !important;
+        caret-color: var(--text-color);
         border: none;
         border-bottom: 1px solid var(--accent-color);
         border-radius: 0;
@@ -223,8 +224,8 @@ st.markdown("""
     
     /* SELECTION BOXES */
     .stSelectbox > div > div {
-        background-color: var(--surface-color);
-        color: var(--text-color);
+        background-color: var(--surface-color) !important;
+        color: var(--text-color) !important;
         border: 1px solid var(--border-color);
         font-family: 'Jost', sans-serif;
     }
@@ -286,6 +287,9 @@ def render_asset_tab(tab_name, data_key, label_singular):
     with tab_name:
         # Upload
         with st.expander(f"Upload New {label_singular}", expanded=False):
+            if data_key == "roster":
+                st.info("💡 **Pro Tip:** For best consistency, upload a **Character Sheet**. Combine 3 close-ups (different angles) and 3 full-body shots into a single 4K image.")
+            
             new_name = st.text_input(f"Name", key=f"name_{data_key}")
             new_file = st.file_uploader(f"Image", type=['png', 'jpg', 'jpeg'], key=f"file_{data_key}")
             
