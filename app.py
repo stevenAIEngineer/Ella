@@ -368,11 +368,37 @@ st.markdown("### CREATIVE BRIEF")
 user_prompt = st.text_area("Enter your vision...", height=100, placeholder="E.g., High fashion portrait, dynamic pose, moody lighting...")
 
 # -- Generation Logic --
-ctr_col1, ctr_col2, ctr_col3 = st.columns([1, 2, 1])
-generated_image = None
+# Layout: Left (Inputs/Settings) | Center (Action) | Right (Output) - Simplified
+# Redesigning Generation Row for Aspect Ratio & Resolution
+st.markdown("### SHOOT SETTINGS")
+set_col1, set_col2, act_col = st.columns([1, 1, 1])
 
-with ctr_col2:
+with set_col1:
+     aspect_ratio = st.radio("Aspect Ratio", ["1:1 (Square)", "16:9 (Landscape)", "9:16 (Portrait)"], label_visibility="collapsed")
+
+with set_col2:
+    resolution = st.radio("Resolution", ["Standard (1K)", "Pro (2K)", "Ultra (4K)"], label_visibility="collapsed")
+
+generated_image = None
+ar_map = {
+    "1:1 (Square)": "1:1",
+    "16:9 (Landscape)": "16:9",
+    "9:16 (Portrait)": "9:16"
+}
+selected_ar = ar_map[aspect_ratio]
+
+# Cost Calculation
+cost_map = {
+    "Standard (1K)": "~$0.14",
+    "Pro (2K)": "~$0.14", 
+    "Ultra (4K)": "~$0.25"
+}
+est_cost = cost_map[resolution]
+
+with act_col:
+    st.markdown("<div style='height: 24px'></div>", unsafe_allow_html=True) # Spacer
     if st.button("INITIATE SHOOT", use_container_width=True):
+        st.caption(f"Est: {est_cost} | {selected_ar} | {resolution.split('(')[1][:-1]}")
         if not client:
             st.error("AI Client not initialized.")
         elif not user_prompt:
@@ -382,20 +408,47 @@ with ctr_col2:
         else:
             with st.spinner("Compiling scene..."):
                 try:
-                    # 1. Image preparation
-                    model_img = base64_to_image(selected_model['image_base64'])
-                    apparel_img = base64_to_image(selected_apparel['image_base64'])
-                    location_img = base64_to_image(selected_location['image_base64']) if selected_location else None
+                    # 1. Image preparation & Optimization
+                    def load_and_resize(b64_str):
+                        if not b64_str: return None
+                        img = base64_to_image(b64_str)
+                        if img:
+                            # Convert to RGB (Remove Alpha Channel if present, as it can cause 500s)
+                            if img.mode != 'RGB':
+                                img = img.convert('RGB')
+                            # Resize to max 800px to be safe
+                            img.thumbnail((800, 800))
+                        return img
+
+                    model_img = load_and_resize(selected_model['image_base64'])
+                    apparel_img = load_and_resize(selected_apparel['image_base64'])
+                    location_img = load_and_resize(selected_location['image_base64']) if selected_location else None
 
                     # 2. Prompt construction
                     # STRICT PROMPT ENGINEERING FOR CONSISTENCY
                     final_prompt = f"STRICT INSTRUCTION: Generate a high-fashion photograph based on the following description: {user_prompt}. "
+                    final_prompt += f" Aspect Ratio: {selected_ar}. "
+                    final_prompt += f" Target Resolution: {resolution.split('(')[0].strip().upper()}. "
                     final_prompt += "Ensure professional editorial lighting, 8k resolution, highly detailed texture. "
-                    final_prompt += "CRITICAL: The person generated MUST match the visual identity of the provided Model reference image (face, hair, body type) exactly. "
-                    final_prompt += "The clothing generated MUST match the provided Apparel reference image exactly in terms of material, color, and fit. "
+                    
+                    # Explicit Input Mapping
+                    final_prompt += "\n\nVISUAL INPUT MAPPING (Critical Compliance Required):"
+                    img_count = 1
+                    if model_img:
+                        final_prompt += f"\n- Image {img_count}: MODEL REFERENCE. You MUST reproduce the face, hair, and body type of this person exactly. Do not alter their identity."
+                        img_count += 1
+                    if apparel_img:
+                        final_prompt += f"\n- Image {img_count}: APPAREL REFERENCE. You MUST reproduce the clothing (material, cut, color, texture) exactly as shown. Ease fit onto the model naturally."
+                        img_count += 1
                     if location_img:
-                        final_prompt += "The background MUST match the provided Location reference image. "
-                    final_prompt += "Do not hallucinate new features unrelated to the request. Deliver a masterpiece."
+                        final_prompt += f"\n- Image {img_count}: LOCATION REFERENCE. Use this strict background."
+                        img_count += 1
+                    
+                    final_prompt += "\n\nEXECUTION GUIDELINES:"
+                    final_prompt += "\n1. Fuse these elements perfectly. The Model (Image 1) wearing the Apparel (Image 2) in the Location (Image 3)."
+                    final_prompt += "\n2. Do NOT change the model's ethnicity or key facial features."
+                    final_prompt += "\n3. Do NOT change the garment's design or fabric."
+                    final_prompt += "\n4. Deliver a photorealistic, Vogue-quality masterpiece."
                     
                     # 3. Request
                     # Input list for the model (Text + Images)
@@ -406,7 +459,7 @@ with ctr_col2:
                         contents.append(apparel_img)
                     if location_img:
                         contents.append(location_img)
-                    
+
                     response = client.models.generate_content(
                         model='gemini-3-pro-image-preview',
                         contents=contents,
@@ -536,9 +589,24 @@ with st.expander("CRUELLA 💬", expanded=False):
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    # Display Chat History with "Auto-Minimize" logic
+    msgs = st.session_state.messages
+    
+    if len(msgs) > 2:
+        # History (Collapsed)
+        with st.expander("Previous Consultations", expanded=False):
+            for m in msgs[:-2]:
+                with st.chat_message(m["role"]):
+                    st.markdown(m["content"])
+        # Latest (Visible)
+        for m in msgs[-2:]:
+            with st.chat_message(m["role"]):
+                st.markdown(m["content"])
+    else:
+        # Show all if short
+        for m in msgs:
+            with st.chat_message(m["role"]):
+                st.markdown(m["content"])
 
     if prompt := st.chat_input("Ask Cruella for perfection..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
@@ -615,6 +683,7 @@ Advise the user on how to improve the shoot or suggest creative prompts based on
                     response_text = chat_resp.text
                     st.markdown(response_text)
                     st.session_state.messages.append({"role": "assistant", "content": response_text})
+                    st.rerun() 
                 except Exception as e:
                     st.error(f"Cruella is unavailable: {e}")
             else:
