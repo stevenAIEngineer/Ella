@@ -522,7 +522,8 @@ with act_col:
                         img_count += 1
                         
                     if apparel_img:
-                        final_prompt += f"\n- Image {img_count}: APPAREL REFERENCE. You MUST reproduce the clothing (material, cut, color, texture) exactly as shown. Ease fit onto the model naturally."
+                        final_prompt += f"\n- Image {img_count}: APPAREL REFERENCE. CRITICAL: You MUST reproduce this garment exactly. Detect and render the exact fabric texture (e.g., silk, denim, knit), the specific cut/silhouette, and any unique details (buttons, patterns, stitching). Do not reimagine or simplify the design."
+                        final_prompt += " Ensure the garment drapes naturally on the model's body, respecting the physics of the fabric's weight and the model's pose."
                         img_count += 1
                     if location_img:
                         final_prompt += f"\n- Image {img_count}: LOCATION REFERENCE. Use this strict background."
@@ -531,7 +532,7 @@ with act_col:
                     final_prompt += "\n\nEXECUTION GUIDELINES:"
                     final_prompt += "\n1. Fuse these elements perfectly. The Model (Face + Body) wearing the Apparel in the Location."
                     final_prompt += "\n2. Do NOT change the model's ethnicity or key facial features (Use Image 1 priority)."
-                    final_prompt += "\n3. Do NOT change the garment's design or fabric."
+                    final_prompt += "\n3. Do NOT change the garment's design or fabric. If the reference is a flat lay, wrap it realistically around the body."
                     final_prompt += "\n4. Deliver a photorealistic, Vogue-quality masterpiece."
                     
                     # 3. Request
