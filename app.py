@@ -125,7 +125,38 @@ def base64_to_image(base64_string: str) -> Optional[Image.Image]:
         image_data = base64.b64decode(base64_string)
         return Image.open(BytesIO(image_data))
     except Exception:
+    except Exception:
         return None
+
+def analyze_apparel_structure(image_bytes, client):
+    """
+    Uses Gemini 3 Pro (Text Mode) to extract technical details of the apparel
+    to prevent hallucination in the final image generation.
+    """
+    try:
+        if not image_bytes or not client: return ""
+        
+        # We need a PIL image for input
+        img = Image.open(BytesIO(image_bytes))
+        
+        analysis_prompt = """
+        Analyze this clothing items technical structure. 
+        Output a concise, 1-sentence technical description focusing on:
+        1. Fabric weight and texture (e.g. "heavyweight satin with stiff drape", "sheer chiffon")
+        2. Cut and Silhouette (e.g. "A-line silhouette with plunging neckline")
+        3. Key Details (e.g. "puff sleeves, ruffled hem")
+        
+        Format: "The apparel is a [Fabric] [Silhouette] featuring [Details]."
+        """
+        
+        response = client.models.generate_content(
+            model='gemini-3-pro-preview',
+            contents=[analysis_prompt, img]
+        )
+        return response.text if response.text else ""
+    except Exception as e:
+        print(f"Apparel Analysis Failed: {e}")
+        return ""
 
 # Initialize User DB
 ensure_user_data()
@@ -502,6 +533,14 @@ with act_col:
                     apparel_img = load_and_resize(selected_apparel['image_base64'])
                     location_img = load_and_resize(selected_location['image_base64']) if selected_location else None
 
+                    # 1.5 APPAREL TECHNICAL ANALYSIS (Fix Hallucinations)
+                    technical_fabric_desc = ""
+                    if selected_apparel:
+                        with st.spinner("Analyzing fabric physics..."):
+                             # We use the raw base64 bytes for analysis
+                             raw_bytes = base64.b64decode(selected_apparel['image_base64'])
+                             technical_fabric_desc = analyze_apparel_structure(raw_bytes, client)
+                    
                     # 2. Prompt construction
                     # STRICT PROMPT ENGINEERING FOR CONSISTENCY
                     final_prompt = f"STRICT INSTRUCTION: Generate a high-fashion photograph based on the following description: {user_prompt}. "
@@ -522,8 +561,10 @@ with act_col:
                         img_count += 1
                         
                     if apparel_img:
-                        final_prompt += f"\n- Image {img_count}: APPAREL REFERENCE. CRITICAL: You MUST reproduce this garment exactly. Detect and render the exact fabric texture (e.g., silk, denim, knit), the specific cut/silhouette, and any unique details (buttons, patterns, stitching). Do not reimagine or simplify the design."
-                        final_prompt += " Ensure the garment drapes naturally on the model's body, respecting the physics of the fabric's weight and the model's pose."
+                        final_prompt += f"\n- Image {img_count}: APPAREL REFERENCE. You MUST reproduce the clothing exactly."
+                        if technical_fabric_desc:
+                            final_prompt += f" TECHNICAL SPECS: {technical_fabric_desc}"
+                        final_prompt += " Ease fit onto the model naturally. Maintain fabric weight and draping physics."
                         img_count += 1
                     if location_img:
                         final_prompt += f"\n- Image {img_count}: LOCATION REFERENCE. Use this strict background."
@@ -532,7 +573,7 @@ with act_col:
                     final_prompt += "\n\nEXECUTION GUIDELINES:"
                     final_prompt += "\n1. Fuse these elements perfectly. The Model (Face + Body) wearing the Apparel in the Location."
                     final_prompt += "\n2. Do NOT change the model's ethnicity or key facial features (Use Image 1 priority)."
-                    final_prompt += "\n3. Do NOT change the garment's design or fabric. If the reference is a flat lay, wrap it realistically around the body."
+                    final_prompt += "\n3. Do NOT change the garment's design or fabric."
                     final_prompt += "\n4. Deliver a photorealistic, Vogue-quality masterpiece."
                     
                     # 3. Request
