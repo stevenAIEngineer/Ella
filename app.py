@@ -434,7 +434,9 @@ with act_col:
                     final_prompt = f"STRICT INSTRUCTION: Generate a high-fashion photograph based on the following description: {user_prompt}. "
                     final_prompt += f" Aspect Ratio: {selected_ar}. "
                     final_prompt += f" Target Resolution: {resolution.split('(')[0].strip().upper()}. "
-                    final_prompt += "Ensure professional editorial lighting, 8k resolution, highly detailed texture. "
+                    final_prompt += "LIGHTING & ATMOSPHERE: Use bright, soft, professional commercial fashion lighting. "
+                    final_prompt += "Ensure the model and apparel are fully illuminated and sharp to highlight the fabric details. Avoid heavy shadows. "
+                    final_prompt += "QUALITY: 8k resolution, highly detailed, photorealistic, commercial catalog standard. "
                     
                     # Explicit Input Mapping
                     final_prompt += "\n\nVISUAL INPUT MAPPING (Critical Compliance Required):"
@@ -457,7 +459,7 @@ with act_col:
                     final_prompt += "\n1. Fuse these elements perfectly. The Model (Image 1) wearing the Apparel (Image 2) in the Location (Image 3)."
                     final_prompt += "\n2. Do NOT change the model's ethnicity or key facial features."
                     final_prompt += "\n3. Do NOT change the garment's design or fabric."
-                    final_prompt += "\n4. Deliver a photorealistic, Vogue-quality masterpiece."
+                    final_prompt += "\n4. CONSISTENCY IS PARAMOUNT. The generated image must strictly adhere to the Model, Apparel, and Location references. No stylistic deviations."
                     
                     # 3. Request
                     # Input list for the model (Text + Images)
