@@ -125,7 +125,6 @@ def base64_to_image(base64_string: str) -> Optional[Image.Image]:
         image_data = base64.b64decode(base64_string)
         return Image.open(BytesIO(image_data))
     except Exception:
-    except Exception:
         return None
 
 def analyze_apparel_structure(image_bytes, client):
