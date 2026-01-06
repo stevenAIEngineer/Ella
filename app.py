@@ -749,7 +749,14 @@ Advise the user on how to improve the shoot or suggest creative prompts based on
                     chat_contents = [prompt]
                     
                     if selected_model:
-                        m_img = base64_to_image(selected_model['image_base64'])
+                        # Handle Dual Ref vs Legacy
+                        if 'face_base64' in selected_model:
+                             m_img = base64_to_image(selected_model['face_base64'])
+                        elif 'image_base64' in selected_model:
+                             m_img = base64_to_image(selected_model['image_base64'])
+                        else:
+                             m_img = None
+                        
                         if m_img: chat_contents.append(m_img)
                     if selected_apparel:
                         a_img = base64_to_image(selected_apparel['image_base64'])
