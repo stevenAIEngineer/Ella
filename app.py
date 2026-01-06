@@ -413,20 +413,21 @@ with act_col:
             with st.spinner("Compiling scene..."):
                 try:
                     # 1. Image preparation & Optimization
-                    def load_and_resize(b64_str):
+                    def load_and_resize(b64_str, target_size=1024):
                         if not b64_str: return None
                         img = base64_to_image(b64_str)
                         if img:
-                            # Convert to RGB (Remove Alpha Channel if present, as it can cause 500s)
+                            # Convert to RGB
                             if img.mode != 'RGB':
                                 img = img.convert('RGB')
-                            # Resize to max 800px to be safe
-                            img.thumbnail((800, 800))
+                            # Reduce size to avoid 500 errors, but maintain enough for face details
+                            img.thumbnail((target_size, target_size))
                         return img
 
-                    model_img = load_and_resize(selected_model['image_base64'])
-                    apparel_img = load_and_resize(selected_apparel['image_base64'])
-                    location_img = load_and_resize(selected_location['image_base64']) if selected_location else None
+                    # Allow higher res for Model to support Character Sheets (multiple angles)
+                    model_img = load_and_resize(selected_model['image_base64'], target_size=1536) 
+                    apparel_img = load_and_resize(selected_apparel['image_base64'], target_size=1024)
+                    location_img = load_and_resize(selected_location['image_base64'], target_size=1024) if selected_location else None
 
                     # 2. Prompt construction
                     # STRICT PROMPT ENGINEERING FOR CONSISTENCY
@@ -439,7 +440,12 @@ with act_col:
                     final_prompt += "\n\nVISUAL INPUT MAPPING (Critical Compliance Required):"
                     img_count = 1
                     if model_img:
-                        final_prompt += f"\n- Image {img_count}: MODEL REFERENCE. You MUST reproduce the face, hair, and body type of this person exactly. Do not alter their identity."
+                        final_prompt += f"\n- Image {img_count}: MODEL IDENTITY REFERENCE. "
+                        final_prompt += "This image establishes the person's face and physical characteristics. "
+                        final_prompt += "If it is a character sheet (multiple angles), IGNORE the grid layout and clothes. "
+                        final_prompt += "CRITICALLY FOCUS on the facial features (eyes, nose, jawline) and skin texture. "
+                        final_prompt += "The generated subject MUST look exactly like this person. Do not blend features. "
+                        final_prompt += "Generate a SINGLE person, not a grid."
                         img_count += 1
                     if apparel_img:
                         final_prompt += f"\n- Image {img_count}: APPAREL REFERENCE. You MUST reproduce the clothing (material, cut, color, texture) exactly as shown. Ease fit onto the model naturally."
