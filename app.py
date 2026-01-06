@@ -282,6 +282,47 @@ st.sidebar.markdown("---")
 
 tab_models, tab_apparel, tab_locations = st.sidebar.tabs(["MODELS", "APPAREL", "LOCATIONS"])
 
+def render_model_tab(tab_name):
+    assets = load_data("roster")
+    with tab_name:
+        # Upload
+        with st.expander("Upload New Model", expanded=False):
+            new_name = st.text_input("Model Name", key="name_roster")
+            face_file = st.file_uploader("Face Ref (Close-up)", type=['png', 'jpg', 'jpeg'], key="file_face_roster")
+            body_file = st.file_uploader("Body Ref (Full Shot)", type=['png', 'jpg', 'jpeg'], key="file_body_roster")
+            
+            if st.button("Save Model", key="save_roster"):
+                if new_name and face_file and body_file:
+                    face_b64 = image_to_base64(face_file)
+                    body_b64 = image_to_base64(body_file)
+                    # New Structure
+                    assets.append({
+                        "name": new_name,
+                        "face_base64": face_b64,
+                        "body_base64": body_b64,
+                        "type": "dual_ref"
+                    })
+                    save_data("roster", assets)
+                    st.success("Saved.")
+                    st.rerun()
+                else:
+                    st.error("Name, Face, and Body images required.")
+
+        # List
+        st.markdown("#### Existing Models")
+        if not assets:
+            st.caption("No models found.")
+        
+        for i, asset in enumerate(assets):
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.text(asset['name'])
+            with col2:
+                if st.button("x", key=f"del_roster_{i}", help="Delete"):
+                    assets.pop(i)
+                    save_data("roster", assets)
+                    st.rerun()
+
 def render_asset_tab(tab_name, data_key, label_singular):
     assets = load_data(data_key)
     with tab_name:
@@ -315,7 +356,7 @@ def render_asset_tab(tab_name, data_key, label_singular):
                     save_data(data_key, assets)
                     st.rerun()
 
-render_asset_tab(tab_models, "roster", "Model")
+render_model_tab(tab_models)
 render_asset_tab(tab_apparel, "closet", "Apparel")
 render_asset_tab(tab_locations, "locations", "Location")
 
@@ -358,7 +399,33 @@ def selection_card(col, title, assets, key_prefix):
             
     return selected
 
-selected_model = selection_card(col_m, "MODEL", models, "model")
+def selection_card_model(col, title, assets):
+    selected = None
+    with col:
+        st.markdown(f"### {title}")
+        options = ["None"] + [a['name'] for a in assets]
+        choice = st.selectbox(f"Select {title}", options, label_visibility="collapsed", key=f"sel_model")
+        
+        if choice != "None":
+            # get asset
+            asset_data = next((a for a in assets if a['name'] == choice), None)
+            if asset_data:
+                selected = asset_data
+                # Display logic: Prefer Face Ref, fallback to old image_base64
+                img_key = 'face_base64' if 'face_base64' in asset_data else 'image_base64'
+                if img_key in asset_data:
+                    img = base64_to_image(asset_data[img_key])
+                    if img:
+                        st.image(img, use_container_width=True)
+        else:
+            st.markdown(f"""
+            <div style="height:200px; border:1px dashed #333; display:flex; align-items:center; justify-content:center; color:#555;">
+                Select {title}
+            </div>
+            """, unsafe_allow_html=True)
+    return selected
+
+selected_model = selection_card_model(col_m, "MODEL", models)
 selected_apparel = selection_card(col_a, "APPAREL", apparel, "apparel")
 selected_location = selection_card(col_l, "LOCATION", locations, "location")
 
@@ -421,7 +488,17 @@ with act_col:
                             img.thumbnail((800, 800))
                         return img
 
-                    model_img = load_and_resize(selected_model['image_base64'])
+                    model_face_img = None
+                    model_body_img = None
+                    
+                    if selected_model:
+                        if 'face_base64' in selected_model and 'body_base64' in selected_model:
+                             model_face_img = load_and_resize(selected_model['face_base64'])
+                             model_body_img = load_and_resize(selected_model['body_base64'])
+                        elif 'image_base64' in selected_model:
+                             # Legacy fallback
+                             model_body_img = load_and_resize(selected_model['image_base64'])
+                    
                     apparel_img = load_and_resize(selected_apparel['image_base64'])
                     location_img = load_and_resize(selected_location['image_base64']) if selected_location else None
 
@@ -435,9 +512,15 @@ with act_col:
                     # Explicit Input Mapping
                     final_prompt += "\n\nVISUAL INPUT MAPPING (Critical Compliance Required):"
                     img_count = 1
-                    if model_img:
-                        final_prompt += f"\n- Image {img_count}: MODEL REFERENCE. You MUST reproduce the face, hair, and body type of this person exactly. Do not alter their identity."
+                    
+                    if model_face_img:
+                        final_prompt += f"\n- Image {img_count}: MODEL FACE REFERENCE (Close-Up). You MUST strictly reproduce this person's facial identity, bone structure, and ethnicity."
                         img_count += 1
+                    
+                    if model_body_img:
+                        final_prompt += f"\n- Image {img_count}: MODEL BODY REFERENCE (Full Shot). Use this for body type, proportions, and pose guidance."
+                        img_count += 1
+                        
                     if apparel_img:
                         final_prompt += f"\n- Image {img_count}: APPAREL REFERENCE. You MUST reproduce the clothing (material, cut, color, texture) exactly as shown. Ease fit onto the model naturally."
                         img_count += 1
@@ -446,16 +529,18 @@ with act_col:
                         img_count += 1
                     
                     final_prompt += "\n\nEXECUTION GUIDELINES:"
-                    final_prompt += "\n1. Fuse these elements perfectly. The Model (Image 1) wearing the Apparel (Image 2) in the Location (Image 3)."
-                    final_prompt += "\n2. Do NOT change the model's ethnicity or key facial features."
+                    final_prompt += "\n1. Fuse these elements perfectly. The Model (Face + Body) wearing the Apparel in the Location."
+                    final_prompt += "\n2. Do NOT change the model's ethnicity or key facial features (Use Image 1 priority)."
                     final_prompt += "\n3. Do NOT change the garment's design or fabric."
                     final_prompt += "\n4. Deliver a photorealistic, Vogue-quality masterpiece."
                     
                     # 3. Request
                     # Input list for the model (Text + Images)
                     contents = [final_prompt]
-                    if model_img: 
-                        contents.append(model_img)
+                    if model_face_img: 
+                        contents.append(model_face_img)
+                    if model_body_img: 
+                        contents.append(model_body_img)
                     if apparel_img:
                         contents.append(apparel_img)
                     if location_img:
