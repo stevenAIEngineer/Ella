@@ -309,6 +309,7 @@ if st.sidebar.button("LOGOUT / SWITCH STUDIO", key="logout"):
     st.session_state.studio_name = None
     st.rerun()
 st.sidebar.markdown("---")
+st.sidebar.caption("Architected by Steven Lansangan")
 
 tab_models, tab_apparel, tab_locations = st.sidebar.tabs(["MODELS", "APPAREL", "LOCATIONS"])
 
