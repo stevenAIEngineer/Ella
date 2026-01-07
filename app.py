@@ -742,36 +742,58 @@ with gh_col2:
             st.error(f"Zip error: {e}")
 
 if gallery:
-    # Display in a grid of 3 columns
-    for i in range(0, len(gallery), 3):
-        batch = gallery[i:i+3]
+    # Pagination State
+    if "gallery_limit" not in st.session_state:
+        st.session_state.gallery_limit = 3
+
+    # Dynamic Grid
+    limit = st.session_state.gallery_limit
+    visible_gallery = gallery[:limit]
+    
+    # Display Grid
+    for i in range(0, len(visible_gallery), 3):
         cols = st.columns(3)
+        batch = visible_gallery[i:i+3]
         for j, item in enumerate(batch):
             idx = i + j
             with cols[j]:
+                # Use a container for better spacing/border?
                 g_img = base64_to_image(item['image_base64'])
                 if g_img:
-                    st.image(g_img, caption=f"{item['timestamp'][:10]}", width="stretch")
+                    st.image(g_img, caption=f"{item['timestamp'][:10]}", use_container_width=True)
                     st.caption(f"{item['prompt'][:30]}...")
                     
-                    # Actions Row
-                    act_c1, act_c2 = st.columns([2, 1])
-                    with act_c1:
+                    # Actions
+                    ac1, ac2 = st.columns([3, 1])
+                    with ac1:
                         buf = BytesIO()
                         g_img.save(buf, format="PNG")
                         st.download_button(
-                            label="Download",
+                            label="DL",
                             data=buf.getvalue(),
-                            file_name=f"ella_shoot_{idx}.png",
+                            file_name=f"shoot_{idx}.png",
                             mime="image/png",
                             key=f"dl_{idx}",
                             use_container_width=True
                         )
-                    with act_c2:
-                        if st.button("🗑", key=f"del_gal_{idx}", help="Remove", use_container_width=True):
+                    with ac2:
+                        if st.button("x", key=f"del_gal_{idx}", help="Delete", use_container_width=True):
                             gallery.pop(idx)
                             save_data("gallery", gallery)
                             st.rerun()
+
+    # Pagination Controls
+    p_col1, p_col2, p_col3 = st.columns([2, 1, 2])
+    with p_col2:
+        if len(gallery) > limit:
+            if st.button("▼ VIEW MORE", use_container_width=True):
+                st.session_state.gallery_limit += 3
+                st.rerun()
+        
+        if limit > 3:
+             if st.button("▲ COLLAPSE", use_container_width=True):
+                st.session_state.gallery_limit = 3
+                st.rerun()
 else:
     st.info("No shoots in portfolio yet.")
 
