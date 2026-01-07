@@ -207,32 +207,41 @@ except ImportError:
 
 def upscale_image_with_vertex(image: Image.Image, scale_factor: str) -> Optional[Image.Image]:
     """
-    Uses Vertex AI to upscale the image.
-    scale_factor: 'x2' (2K) or 'x4' (4K)
+    Refines and Upscales image using Gemini 3 Pro (Image-to-Image)
+    since the dedicated upscale endpoint is currently unstable/hanging.
     """
-    if not client_vertex:
+    if not client_standard: # Fallback to standard client for stability
         return None
+        
     try:
-        # Check if the client has the upscale method, if not, simpler fallback or error
-        # Assuming google-genai SDK 0.3+ structure for upscale
-        response = client_vertex.models.upscale_image(
-            model='imagen-3.0-generate-001',
-            image=image,
-            upscale_factor=scale_factor
+        # We perform a "Creative Upscale" (Image-to-Image)
+        # This keeps composition but adds pixel density and texture
+        
+        prompt = "High-resolution remaster of this image. "
+        prompt += "Significantly enhance texture details, lighting, and sharpness. "
+        prompt += "Output in strictly high fidelity 4K resolution. "
+        prompt += "Do not alter the subject's face or the clothing design. Just upsale quality."
+        
+        response = client_standard.models.generate_content(
+            model='gemini-3-pro-image-preview',
+            contents=[prompt, image],
+             config=types.GenerateContentConfig(
+                safety_settings=[types.SafetySetting(
+                    category="HARM_CATEGORY_DANGEROUS_CONTENT",
+                    threshold="BLOCK_ONLY_HIGH"
+                )]
+            )
         )
-        if response.generated_images:
-             return response.generated_images[0].image
+        
+        if response.parts:
+            for part in response.parts:
+                 if part.inline_data:
+                    return Image.open(BytesIO(base64.b64decode(part.inline_data.data)))
+        
         return None
+
     except Exception as e:
-        print(f"Vertex Upscale Error: {e}") # Print to terminal for debug
-        error_msg = str(e)
-        if "default credentials" in error_msg.lower():
-            st.error("Vertex Configuration Error: Application Default Credentials not found.")
-            st.info("Check usage of GOOGLE_APPLICATION_CREDENTIALS in .env")
-        elif "404" in error_msg or "not found" in error_msg.lower():
-             st.error(f"Model Error: The model 'imagen-3.0-generate-001' might not be available in project {project_id} location {location}.")
-        else:
-            st.error(f"Vertex Upscale Failed: {e}")
+        print(f"Upscale Error: {e}")
         return None
 
 # ---------------------------------------------------------
@@ -769,7 +778,6 @@ if gallery:
                 g_img = base64_to_image(item['image_base64'])
                 if g_img:
                     st.image(g_img, caption=f"{item['timestamp'][:10]}", use_container_width=True)
-                    st.caption(f"{item['prompt'][:30]}...")
                     
                     # Actions
                     ac1, ac2 = st.columns([3, 1])
