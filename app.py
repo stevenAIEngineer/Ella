@@ -694,8 +694,8 @@ with act_col:
                             upscale_factor = "x4"
                         
                         if upscale_factor:
-                            if client_vertex:
-                                with st.spinner(f"Enhancing to {resolution} via Vertex AI..."):
+                            if client_standard:
+                                with st.spinner(f"Enhancing to {resolution}..."):
                                     upscaled = upscale_image_with_vertex(generated_pil, upscale_factor)
                                     if upscaled:
                                         final_pil = upscaled
