@@ -902,22 +902,11 @@ Advise the user on how to improve the shoot or suggest creative prompts based on
                     
                     chat_contents = [prompt]
                     
-                    if selected_model:
-                        # Handle Dual Ref vs Legacy
-                        if 'face_base64' in selected_model:
-                             m_img = base64_to_image(selected_model['face_base64'])
-                        elif 'image_base64' in selected_model:
-                             m_img = base64_to_image(selected_model['image_base64'])
-                        else:
-                             m_img = None
-                        
-                        if m_img: chat_contents.append(m_img)
-                    if selected_apparel:
-                        a_img = base64_to_image(selected_apparel['image_base64'])
-                        if a_img: chat_contents.append(a_img)
-                    if selected_location:
-                        l_img = base64_to_image(selected_location['image_base64'])
-                        if l_img: chat_contents.append(l_img)
+                    # PERFORMANCE OPTIMIZATION: 
+                    # We rely on the System Prompt details (names) rather than re-uploading heavy images 
+                    # for every chat turn. This prevents "Forever Loading".
+                    # Images are only sent to the Generation Engine, not the Chatbot.
+                    pass
 
                     with st.spinner("Cruella is judging you..."):
                         chat_resp = client_standard.models.generate_content(
