@@ -1,2 +1,8 @@
 .env
 gen-lang-client-0455389450-01df699be37f.json
+__pycache__/
+*.pyc
+
+# Data persistence
+# Ignore all data JSONs so local/prod state isn't overwritten by git logic
+data/
