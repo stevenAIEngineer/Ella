@@ -145,7 +145,7 @@ def analyze_apparel_structure(image_bytes, client):
         2. Cut and Silhouette (e.g. "A-line silhouette with plunging neckline")
         3. Key Details (e.g. "puff sleeves, ruffled hem")
         
-        Format: "The apparel is a [Fabric] [Silhouette] featuring [Details]."
+        Format: "The apparel is a [Fabric] [Silhouette] featuring [Details]. The fabric behaves like [Physics Description] on the body."
         """
         
         response = client.models.generate_content(
@@ -629,7 +629,7 @@ with act_col:
                         final_prompt += f"\n- Image {img_count}: APPAREL REFERENCE. You MUST reproduce the clothing exactly."
                         if technical_fabric_desc:
                             final_prompt += f" TECHNICAL SPECS: {technical_fabric_desc}"
-                        final_prompt += " Ease fit onto the model naturally. Maintain fabric weight and draping physics."
+                        final_prompt += " Draping: GRAVITY-COMPLIANT. The fabric must hang, fold, and stretch realistically based on its material weight. NO floating or stiff artifacts."
                         img_count += 1
                     if location_img:
                         final_prompt += f"\n- Image {img_count}: LOCATION REFERENCE. Use this strict background."
@@ -638,7 +638,7 @@ with act_col:
                     final_prompt += "\n\nEXECUTION GUIDELINES:"
                     final_prompt += "\n1. Fuse these elements perfectly. The Model (Face + Body) wearing the Apparel in the Location."
                     final_prompt += "\n2. Do NOT change the model's ethnicity or key facial features (Use Image 1 priority)."
-                    final_prompt += "\n3. Do NOT change the garment's design or fabric."
+                    final_prompt += "\n3. Do NOT change the garment's design or fabric. Adapt the fit to the model's pose naturally."
                     final_prompt += "\n4. Deliver a photorealistic, Vogue-quality masterpiece."
                     
                     # 3. Request
