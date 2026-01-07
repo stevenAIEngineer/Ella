@@ -224,10 +224,13 @@ def upscale_image_with_vertex(image: Image.Image, scale_factor: str) -> Optional
              return response.generated_images[0].image
         return None
     except Exception as e:
+        print(f"Vertex Upscale Error: {e}") # Print to terminal for debug
         error_msg = str(e)
         if "default credentials" in error_msg.lower():
             st.error("Vertex Configuration Error: Application Default Credentials not found.")
-            st.info("To fix: Run `gcloud auth application-default login` in your terminal.")
+            st.info("Check usage of GOOGLE_APPLICATION_CREDENTIALS in .env")
+        elif "404" in error_msg or "not found" in error_msg.lower():
+             st.error(f"Model Error: The model 'imagen-3.0-generate-001' might not be available in project {project_id} location {location}.")
         else:
             st.error(f"Vertex Upscale Failed: {e}")
         return None
