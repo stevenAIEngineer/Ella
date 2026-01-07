@@ -127,122 +127,31 @@ def base64_to_image(base64_string: str) -> Optional[Image.Image]:
     except Exception:
         return None
 
-def analyze_apparel_structure(image_bytes, client):
-    """
-    Uses Gemini 3 Pro (Text Mode) to extract technical details of the apparel
-    to prevent hallucination in the final image generation.
-    """
-    try:
-        if not image_bytes or not client: return ""
-        
-        # We need a PIL image for input
-        img = Image.open(BytesIO(image_bytes))
-        
-        analysis_prompt = """
-        Analyze this clothing items technical structure. 
-        Output a concise, 1-sentence technical description focusing on:
-        1. Fabric weight and texture (e.g. "heavyweight satin with stiff drape", "sheer chiffon")
-        2. Cut and Silhouette (e.g. "A-line silhouette with plunging neckline")
-        3. Key Details (e.g. "puff sleeves, ruffled hem")
-        
-        Format: "The apparel is a [Fabric] [Silhouette] featuring [Details]. The fabric behaves like [Physics Description] on the body."
-        """
-        
-        response = client.models.generate_content(
-            model='gemini-3-pro-preview',
-            contents=[analysis_prompt, img]
-        )
-        return response.text if response.text else ""
-    except Exception as e:
-        print(f"Apparel Analysis Failed: {e}")
-        return ""
-
 # Initialize User DB
 ensure_user_data()
 
 # ---------------------------------------------------------
 # 4. GOOGLE GENAI CLIENT
 # ---------------------------------------------------------
-# ---------------------------------------------------------
-# 4. GOOGLE GENAI CLIENTS (HYBRID ARCHITECTURE)
-# ---------------------------------------------------------
-# Standard Client (AI Studio - Free/Fast Tier) for Text & Base Generation
-api_key_standard = os.getenv("GOOGLE_API_KEY") 
-
-# Vertex Client (GCP - Enterprise/Power Tier) for Upscaling
-api_key_vertex = os.getenv("GOOGLE_VERTEX_AI_API_KEY")
-project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
-location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
-
-client_standard = None
-client_vertex = None
+api_key = os.getenv("GOOGLE_API_KEY") 
 
 try:
     from google import genai
     from google.genai import types
     from google.genai.types import HttpOptions
     
-    # 1. Initialize Standard Client
-    if api_key_standard:
-        client_standard = genai.Client(
-            api_key=api_key_standard,
+    if api_key:
+        client = genai.Client(
+            api_key=api_key,
             http_options=HttpOptions(api_version="v1alpha")
         )
     else:
-        st.warning("GOOGLE_API_KEY (Standard) not found.")
-
-    # 2. Initialize Vertex Client
-    if project_id and location:
-        # Vertex AI uses ADC (Application Default Credentials) or Service Account
-        # It does NOT use an API Key in the constructor when vertexai=True
-        client_vertex = genai.Client(
-            vertexai=True,
-            project=project_id,
-            location=location,
-            http_options=HttpOptions(api_version="v1")
-        )
+        st.warning("GOOGLE_API_KEY not found in environment variables.")
+        client = None
 
 except ImportError:
-    st.error("`google-genai` library not installed.")
-
-def upscale_image_with_vertex(image: Image.Image, scale_factor: str) -> Optional[Image.Image]:
-    """
-    Refines and Upscales image using Gemini 3 Pro (Image-to-Image)
-    since the dedicated upscale endpoint is currently unstable/hanging.
-    """
-    if not client_standard: # Fallback to standard client for stability
-        return None
-        
-    try:
-        # We perform a "Creative Upscale" (Image-to-Image)
-        # This keeps composition but adds pixel density and texture
-        
-        prompt = "High-resolution remaster of this image. "
-        prompt += "Significantly enhance texture details, lighting, and sharpness. "
-        prompt += "Output in strictly high fidelity 4K resolution. "
-        prompt += "Do not alter the subject's face or the clothing design. Just upsale quality."
-        
-        response = client_standard.models.generate_content(
-            model='gemini-3-pro-image-preview',
-            contents=[prompt, image],
-             config=types.GenerateContentConfig(
-                safety_settings=[types.SafetySetting(
-                    category="HARM_CATEGORY_DANGEROUS_CONTENT",
-                    threshold="BLOCK_ONLY_HIGH"
-                )]
-            )
-        )
-        
-        if response.parts:
-            for part in response.parts:
-                 if part.inline_data:
-                    return Image.open(BytesIO(base64.b64decode(part.inline_data.data)))
-        
-        return None
-
-    except Exception as e:
-        print(f"Upscale Error: {e}")
-        return None
+    st.error("`google-genai` library not installed. Please install it.")
+    client = None
 
 # ---------------------------------------------------------
 # 5. DESIGN SYSTEM
@@ -370,7 +279,6 @@ if st.sidebar.button("LOGOUT / SWITCH STUDIO", key="logout"):
     st.session_state.studio_name = None
     st.rerun()
 st.sidebar.markdown("---")
-st.sidebar.caption("Architected by Steven Lansangan")
 
 tab_models, tab_apparel, tab_locations = st.sidebar.tabs(["MODELS", "APPAREL", "LOCATIONS"])
 
@@ -559,11 +467,7 @@ with act_col:
     st.markdown("<div style='height: 24px'></div>", unsafe_allow_html=True) # Spacer
     if st.button("INITIATE SHOOT", use_container_width=True):
         st.caption(f"Est: {est_cost} | {selected_ar} | {resolution.split('(')[1][:-1]}")
-        
-        # Check clients
-        if not client_standard:
-            st.error("Standard AI Client not initialized.")
-        elif not user_prompt:
+        if not client:
             st.error("AI Client not initialized.")
         elif not user_prompt:
             st.error("Please provide a prompt.")
@@ -598,49 +502,37 @@ with act_col:
                     apparel_img = load_and_resize(selected_apparel['image_base64'])
                     location_img = load_and_resize(selected_location['image_base64']) if selected_location else None
 
-                    # 1.5 APPAREL TECHNICAL ANALYSIS (Fix Hallucinations)
-                    technical_fabric_desc = ""
-                    if selected_apparel:
-                        with st.spinner("Analyzing fabric physics..."):
-                             # We use the raw base64 bytes for analysis
-                             raw_bytes = base64.b64decode(selected_apparel['image_base64'])
-                             technical_fabric_desc = analyze_apparel_structure(raw_bytes, client_standard)
-                    
                     # 2. Prompt construction
-                    # PIVOT: E-COMMERCE CATALOG STYLE (Consistency > Art)
-                    final_prompt = f"STRICT INSTRUCTION: Generate a commercial e-commerce fashion catalog photograph. "
-                    final_prompt += f" Subject: {user_prompt}. "
+                    # STRICT PROMPT ENGINEERING FOR CONSISTENCY
+                    final_prompt = f"STRICT INSTRUCTION: Generate a high-fashion photograph based on the following description: {user_prompt}. "
                     final_prompt += f" Aspect Ratio: {selected_ar}. "
-                    final_prompt += f" Resolution: {resolution.split('(')[0].strip().upper()}. "
-                    final_prompt += "Style: Clean, Commercial, Realistic, Studio Lighting. High consistency like Zara/ASOS product shots. NO artistic filters. NO dramatic shadows. "
+                    final_prompt += f" Target Resolution: {resolution.split('(')[0].strip().upper()}. "
+                    final_prompt += "Ensure professional editorial lighting, 8k resolution, highly detailed texture. "
                     
                     # Explicit Input Mapping
-                    final_prompt += "\n\nVISUAL ASSETS (Strict Adherence):"
+                    final_prompt += "\n\nVISUAL INPUT MAPPING (Critical Compliance Required):"
                     img_count = 1
                     
                     if model_face_img:
-                        final_prompt += f"\n- Image {img_count}: MODEL IDENTITY (Immutable). You must use this exact person's face. Keep skin tone and facial structure 100% consistent."
+                        final_prompt += f"\n- Image {img_count}: MODEL FACE REFERENCE (Close-Up). You MUST strictly reproduce this person's facial identity, bone structure, and ethnicity."
                         img_count += 1
                     
                     if model_body_img:
-                        final_prompt += f"\n- Image {img_count}: BODY REFERENCE. Use this body shape and pose."
+                        final_prompt += f"\n- Image {img_count}: MODEL BODY REFERENCE (Full Shot). Use this for body type, proportions, and pose guidance."
                         img_count += 1
                         
                     if apparel_img:
-                        final_prompt += f"\n- Image {img_count}: PRODUCT REFERENCE (Apparel). This is the product being sold. Render it with 100% fidelity to color, texture, and cut."
-                        if technical_fabric_desc:
-                            final_prompt += f" FABRIC PHYSICS: {technical_fabric_desc}"
-                        final_prompt += " Draping: Natural fit. The fabric must fall realistically on the body."
+                        final_prompt += f"\n- Image {img_count}: APPAREL REFERENCE. You MUST reproduce the clothing (material, cut, color, texture) exactly as shown. Ease fit onto the model naturally."
                         img_count += 1
                     if location_img:
-                        final_prompt += f"\n- Image {img_count}: BACKGROUND. Use this location but keep it slightly soft-focus to prioritize the product."
+                        final_prompt += f"\n- Image {img_count}: LOCATION REFERENCE. Use this strict background."
                         img_count += 1
                     
-                    final_prompt += "\n\nOUTPUT REQUIREMENTS:"
-                    final_prompt += "\n1. CATALOG ACCURACY: The Model looks real, the Clothes look real. No AI hallucinations."
-                    final_prompt += "\n2. IDENTITY LOCK: Same model as Image 1."
-                    final_prompt += "\n3. LIGHTING: Even, bright studio lighting to show fabric details clearly."
-                    final_prompt += "\n4. COMPOSITION: Standard fashion product shot. Clean and direct."
+                    final_prompt += "\n\nEXECUTION GUIDELINES:"
+                    final_prompt += "\n1. Fuse these elements perfectly. The Model (Face + Body) wearing the Apparel in the Location."
+                    final_prompt += "\n2. Do NOT change the model's ethnicity or key facial features (Use Image 1 priority)."
+                    final_prompt += "\n3. Do NOT change the garment's design or fabric."
+                    final_prompt += "\n4. Deliver a photorealistic, Vogue-quality masterpiece."
                     
                     # 3. Request
                     # Input list for the model (Text + Images)
@@ -654,7 +546,7 @@ with act_col:
                     if location_img:
                         contents.append(location_img)
 
-                    response = client_standard.models.generate_content(
+                    response = client.models.generate_content(
                         model='gemini-3-pro-image-preview',
                         contents=contents,
                         config=types.GenerateContentConfig(
@@ -685,34 +577,12 @@ with act_col:
                                 st.warning("Received link instead of image: " + part.text)
                     
                     if generated_pil:
-                        
-                        # HYBRID ARCHITECTURE: UPSCALING STEP
-                        final_pil = generated_pil
-                        upscale_factor = None
-                        if "2K" in resolution:
-                            upscale_factor = "x2"
-                        elif "4K" in resolution:
-                            upscale_factor = "x4"
-                        
-                        if upscale_factor:
-                            if client_standard:
-                                with st.spinner(f"Enhancing to {resolution}..."):
-                                    upscaled = upscale_image_with_vertex(generated_pil, upscale_factor)
-                                    if upscaled:
-                                        final_pil = upscaled
-                                        st.success(f"Upscale Complete ({resolution})")
-                                    else:
-                                        st.warning("Upscale failed, showing standard resolution.")
-                            else:
-                                st.warning("Vertex AI not configured. Returning standard resolution.")
-                        else:
-                            st.success("SHOOT COMPLETE")
-
-                        st.image(final_pil, caption="Final Result", width="stretch")
+                        st.success("SHOOT COMPLETE")
+                        st.image(generated_pil, caption="Final Result", width="stretch")
                         
                         # Save to Gallery
                         res_buffer = BytesIO()
-                        final_pil.save(res_buffer, format="PNG")
+                        generated_pil.save(res_buffer, format="PNG")
                         b64_res = base64.b64encode(res_buffer.getvalue()).decode('utf-8')
                         
                         gallery_items = load_data("gallery")
@@ -760,57 +630,32 @@ with gh_col2:
             st.error(f"Zip error: {e}")
 
 if gallery:
-    # Pagination State
-    if "gallery_limit" not in st.session_state:
-        st.session_state.gallery_limit = 3
-
-    # Dynamic Grid
-    limit = st.session_state.gallery_limit
-    visible_gallery = gallery[:limit]
-    
-    # Display Grid
-    for i in range(0, len(visible_gallery), 3):
-        cols = st.columns(3)
-        batch = visible_gallery[i:i+3]
-        for j, item in enumerate(batch):
-            idx = i + j
-            with cols[j]:
-                # Use a container for better spacing/border?
-                g_img = base64_to_image(item['image_base64'])
-                if g_img:
-                    st.image(g_img, caption=f"{item['timestamp'][:10]}", use_container_width=True)
-                    
-                    # Actions
-                    ac1, ac2 = st.columns([3, 1])
-                    with ac1:
-                        buf = BytesIO()
-                        g_img.save(buf, format="PNG")
-                        st.download_button(
-                            label="Download",
-                            data=buf.getvalue(),
-                            file_name=f"shoot_{idx}.png",
-                            mime="image/png",
-                            key=f"dl_{idx}",
-                            use_container_width=True
-                        )
-                    with ac2:
-                        if st.button("x", key=f"del_gal_{idx}", help="Delete", use_container_width=True):
-                            gallery.pop(idx)
-                            save_data("gallery", gallery)
-                            st.rerun()
-
-    # Pagination Controls
-    p_col1, p_col2, p_col3 = st.columns([2, 1, 2])
-    with p_col2:
-        if len(gallery) > limit:
-            if st.button("▼ VIEW MORE", use_container_width=True):
-                st.session_state.gallery_limit += 3
-                st.rerun()
-        
-        if limit > 3:
-             if st.button("▲ COLLAPSE", use_container_width=True):
-                st.session_state.gallery_limit = 3
-                st.rerun()
+    g_cols = st.columns(3)
+    for i, item in enumerate(gallery[:3]): # Last 3
+        with g_cols[i]:
+            g_img = base64_to_image(item['image_base64'])
+            if g_img:
+                st.image(g_img, caption=f"{item['timestamp'][:10]}", width="stretch")
+                st.caption(f"{item['prompt'][:30]}...")
+                
+                # Actions Row
+                act_c1, act_c2 = st.columns([2, 1])
+                with act_c1:
+                    buf = BytesIO()
+                    g_img.save(buf, format="PNG")
+                    st.download_button(
+                        label="Download",
+                        data=buf.getvalue(),
+                        file_name=f"ella_shoot_{i}.png",
+                        mime="image/png",
+                        key=f"dl_{i}",
+                        use_container_width=True
+                    )
+                with act_c2:
+                    if st.button("🗑", key=f"del_gal_{i}", help="Remove", use_container_width=True):
+                        gallery.pop(i)
+                        save_data("gallery", gallery)
+                        st.rerun()
 else:
     st.info("No shoots in portfolio yet.")
 
@@ -855,7 +700,7 @@ with st.expander("CRUELLA 💬", expanded=False):
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            if client_standard:
+            if client:
                 try:
                     # Chat Logic
                     # CRUELLA PERSONA SYSTEM PROMPT
@@ -903,14 +748,25 @@ Advise the user on how to improve the shoot or suggest creative prompts based on
                     
                     chat_contents = [prompt]
                     
-                    # PERFORMANCE OPTIMIZATION: 
-                    # We rely on the System Prompt details (names) rather than re-uploading heavy images 
-                    # for every chat turn. This prevents "Forever Loading".
-                    # Images are only sent to the Generation Engine, not the Chatbot.
-                    pass
+                    if selected_model:
+                        # Handle Dual Ref vs Legacy
+                        if 'face_base64' in selected_model:
+                             m_img = base64_to_image(selected_model['face_base64'])
+                        elif 'image_base64' in selected_model:
+                             m_img = base64_to_image(selected_model['image_base64'])
+                        else:
+                             m_img = None
+                        
+                        if m_img: chat_contents.append(m_img)
+                    if selected_apparel:
+                        a_img = base64_to_image(selected_apparel['image_base64'])
+                        if a_img: chat_contents.append(a_img)
+                    if selected_location:
+                        l_img = base64_to_image(selected_location['image_base64'])
+                        if l_img: chat_contents.append(l_img)
 
                     with st.spinner("Cruella is judging you..."):
-                        chat_resp = client_standard.models.generate_content(
+                        chat_resp = client.models.generate_content(
                             model='gemini-3-pro-preview',
                             contents=chat_contents,
                             config=types.GenerateContentConfig(
