@@ -163,25 +163,68 @@ ensure_user_data()
 # ---------------------------------------------------------
 # 4. GOOGLE GENAI CLIENT
 # ---------------------------------------------------------
-api_key = os.getenv("GOOGLE_API_KEY") 
+# ---------------------------------------------------------
+# 4. GOOGLE GENAI CLIENTS (HYBRID ARCHITECTURE)
+# ---------------------------------------------------------
+# Standard Client (AI Studio - Free/Fast Tier) for Text & Base Generation
+api_key_standard = os.getenv("GOOGLE_API_KEY") 
+
+# Vertex Client (GCP - Enterprise/Power Tier) for Upscaling
+api_key_vertex = os.getenv("GOOGLE_VERTEX_AI_API_KEY")
+project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
+location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+
+client_standard = None
+client_vertex = None
 
 try:
     from google import genai
     from google.genai import types
     from google.genai.types import HttpOptions
     
-    if api_key:
-        client = genai.Client(
-            api_key=api_key,
+    # 1. Initialize Standard Client
+    if api_key_standard:
+        client_standard = genai.Client(
+            api_key=api_key_standard,
             http_options=HttpOptions(api_version="v1alpha")
         )
     else:
-        st.warning("GOOGLE_API_KEY not found in environment variables.")
-        client = None
+        st.warning("GOOGLE_API_KEY (Standard) not found.")
+
+    # 2. Initialize Vertex Client
+    if api_key_vertex and project_id:
+        client_vertex = genai.Client(
+            vertexai=True,
+            project=project_id,
+            location=location,
+            api_key=api_key_vertex,
+            http_options=HttpOptions(api_version="v1")
+        )
 
 except ImportError:
-    st.error("`google-genai` library not installed. Please install it.")
-    client = None
+    st.error("`google-genai` library not installed.")
+
+def upscale_image_with_vertex(image: Image.Image, scale_factor: str) -> Optional[Image.Image]:
+    """
+    Uses Vertex AI to upscale the image.
+    scale_factor: 'x2' (2K) or 'x4' (4K)
+    """
+    if not client_vertex:
+        return None
+    try:
+        # Check if the client has the upscale method, if not, simpler fallback or error
+        # Assuming google-genai SDK 0.3+ structure for upscale
+        response = client_vertex.models.upscale_image(
+            model='imagen-3.0-generate-001',
+            image=image,
+            upscale_factor=scale_factor
+        )
+        if response.generated_images:
+             return response.generated_images[0].image
+        return None
+    except Exception as e:
+        st.error(f"Vertex Upscale Failed: {e}")
+        return None
 
 # ---------------------------------------------------------
 # 5. DESIGN SYSTEM
@@ -498,7 +541,11 @@ with act_col:
     st.markdown("<div style='height: 24px'></div>", unsafe_allow_html=True) # Spacer
     if st.button("INITIATE SHOOT", use_container_width=True):
         st.caption(f"Est: {est_cost} | {selected_ar} | {resolution.split('(')[1][:-1]}")
-        if not client:
+        
+        # Check clients
+        if not client_standard:
+            st.error("Standard AI Client not initialized.")
+        elif not user_prompt:
             st.error("AI Client not initialized.")
         elif not user_prompt:
             st.error("Please provide a prompt.")
@@ -539,7 +586,7 @@ with act_col:
                         with st.spinner("Analyzing fabric physics..."):
                              # We use the raw base64 bytes for analysis
                              raw_bytes = base64.b64decode(selected_apparel['image_base64'])
-                             technical_fabric_desc = analyze_apparel_structure(raw_bytes, client)
+                             technical_fabric_desc = analyze_apparel_structure(raw_bytes, client_standard)
                     
                     # 2. Prompt construction
                     # STRICT PROMPT ENGINEERING FOR CONSISTENCY
@@ -588,7 +635,7 @@ with act_col:
                     if location_img:
                         contents.append(location_img)
 
-                    response = client.models.generate_content(
+                    response = client_standard.models.generate_content(
                         model='gemini-3-pro-image-preview',
                         contents=contents,
                         config=types.GenerateContentConfig(
@@ -619,12 +666,34 @@ with act_col:
                                 st.warning("Received link instead of image: " + part.text)
                     
                     if generated_pil:
-                        st.success("SHOOT COMPLETE")
-                        st.image(generated_pil, caption="Final Result", width="stretch")
+                        
+                        # HYBRID ARCHITECTURE: UPSCALING STEP
+                        final_pil = generated_pil
+                        upscale_factor = None
+                        if "2K" in resolution:
+                            upscale_factor = "x2"
+                        elif "4K" in resolution:
+                            upscale_factor = "x4"
+                        
+                        if upscale_factor:
+                            if client_vertex:
+                                with st.spinner(f"Enhancing to {resolution} via Vertex AI..."):
+                                    upscaled = upscale_image_with_vertex(generated_pil, upscale_factor)
+                                    if upscaled:
+                                        final_pil = upscaled
+                                        st.success(f"Upscale Complete ({resolution})")
+                                    else:
+                                        st.warning("Upscale failed, showing standard resolution.")
+                            else:
+                                st.warning("Vertex AI not configured. Returning standard resolution.")
+                        else:
+                            st.success("SHOOT COMPLETE")
+
+                        st.image(final_pil, caption="Final Result", width="stretch")
                         
                         # Save to Gallery
                         res_buffer = BytesIO()
-                        generated_pil.save(res_buffer, format="PNG")
+                        final_pil.save(res_buffer, format="PNG")
                         b64_res = base64.b64encode(res_buffer.getvalue()).decode('utf-8')
                         
                         gallery_items = load_data("gallery")
@@ -742,7 +811,7 @@ with st.expander("CRUELLA 💬", expanded=False):
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            if client:
+            if client_standard:
                 try:
                     # Chat Logic
                     # CRUELLA PERSONA SYSTEM PROMPT
@@ -808,7 +877,7 @@ Advise the user on how to improve the shoot or suggest creative prompts based on
                         if l_img: chat_contents.append(l_img)
 
                     with st.spinner("Cruella is judging you..."):
-                        chat_resp = client.models.generate_content(
+                        chat_resp = client_standard.models.generate_content(
                             model='gemini-3-pro-preview',
                             contents=chat_contents,
                             config=types.GenerateContentConfig(
