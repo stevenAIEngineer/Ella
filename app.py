@@ -618,7 +618,7 @@ with act_col:
                     img_count = 1
                     
                     if model_face_img:
-                        final_prompt += f"\n- Image {img_count}: MODEL FACE REFERENCE (Close-Up). You MUST strictly reproduce this person's facial identity, bone structure, and ethnicity."
+                        final_prompt += f"\n- Image {img_count}: MODEL FACE REFERENCE (Close-Up). IDENTITY PROTECTION: HIGHEST. You MUST strictly reproduce this exact facial structure, ethnicity, skin tone, and features. DO NOT GENERATE A GENERIC MODEL. USE THIS FACE."
                         img_count += 1
                     
                     if model_body_img:
@@ -637,7 +637,7 @@ with act_col:
                     
                     final_prompt += "\n\nEXECUTION GUIDELINES:"
                     final_prompt += "\n1. Fuse these elements perfectly. The Model (Face + Body) wearing the Apparel in the Location."
-                    final_prompt += "\n2. Do NOT change the model's ethnicity or key facial features (Use Image 1 priority)."
+                    final_prompt += "\n2. IDENTITY LOCK: The final image MUST look exactly like the person in Image 1."
                     final_prompt += "\n3. Do NOT change the garment's design or fabric. Adapt the fit to the model's pose naturally."
                     final_prompt += "\n4. Deliver a photorealistic, Vogue-quality masterpiece."
                     
