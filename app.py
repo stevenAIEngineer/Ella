@@ -192,12 +192,13 @@ try:
         st.warning("GOOGLE_API_KEY (Standard) not found.")
 
     # 2. Initialize Vertex Client
-    if api_key_vertex and project_id:
+    if project_id and location:
+        # Vertex AI uses ADC (Application Default Credentials) or Service Account
+        # It does NOT use an API Key in the constructor when vertexai=True
         client_vertex = genai.Client(
             vertexai=True,
             project=project_id,
             location=location,
-            api_key=api_key_vertex,
             http_options=HttpOptions(api_version="v1")
         )
 
@@ -741,32 +742,36 @@ with gh_col2:
             st.error(f"Zip error: {e}")
 
 if gallery:
-    g_cols = st.columns(3)
-    for i, item in enumerate(gallery[:3]): # Last 3
-        with g_cols[i]:
-            g_img = base64_to_image(item['image_base64'])
-            if g_img:
-                st.image(g_img, caption=f"{item['timestamp'][:10]}", width="stretch")
-                st.caption(f"{item['prompt'][:30]}...")
-                
-                # Actions Row
-                act_c1, act_c2 = st.columns([2, 1])
-                with act_c1:
-                    buf = BytesIO()
-                    g_img.save(buf, format="PNG")
-                    st.download_button(
-                        label="Download",
-                        data=buf.getvalue(),
-                        file_name=f"ella_shoot_{i}.png",
-                        mime="image/png",
-                        key=f"dl_{i}",
-                        use_container_width=True
-                    )
-                with act_c2:
-                    if st.button("🗑", key=f"del_gal_{i}", help="Remove", use_container_width=True):
-                        gallery.pop(i)
-                        save_data("gallery", gallery)
-                        st.rerun()
+    # Display in a grid of 3 columns
+    for i in range(0, len(gallery), 3):
+        batch = gallery[i:i+3]
+        cols = st.columns(3)
+        for j, item in enumerate(batch):
+            idx = i + j
+            with cols[j]:
+                g_img = base64_to_image(item['image_base64'])
+                if g_img:
+                    st.image(g_img, caption=f"{item['timestamp'][:10]}", width="stretch")
+                    st.caption(f"{item['prompt'][:30]}...")
+                    
+                    # Actions Row
+                    act_c1, act_c2 = st.columns([2, 1])
+                    with act_c1:
+                        buf = BytesIO()
+                        g_img.save(buf, format="PNG")
+                        st.download_button(
+                            label="Download",
+                            data=buf.getvalue(),
+                            file_name=f"ella_shoot_{idx}.png",
+                            mime="image/png",
+                            key=f"dl_{idx}",
+                            use_container_width=True
+                        )
+                    with act_c2:
+                        if st.button("🗑", key=f"del_gal_{idx}", help="Remove", use_container_width=True):
+                            gallery.pop(idx)
+                            save_data("gallery", gallery)
+                            st.rerun()
 else:
     st.info("No shoots in portfolio yet.")
 
