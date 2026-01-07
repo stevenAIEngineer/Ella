@@ -224,7 +224,12 @@ def upscale_image_with_vertex(image: Image.Image, scale_factor: str) -> Optional
              return response.generated_images[0].image
         return None
     except Exception as e:
-        st.error(f"Vertex Upscale Failed: {e}")
+        error_msg = str(e)
+        if "default credentials" in error_msg.lower():
+            st.error("Vertex Configuration Error: Application Default Credentials not found.")
+            st.info("To fix: Run `gcloud auth application-default login` in your terminal.")
+        else:
+            st.error(f"Vertex Upscale Failed: {e}")
         return None
 
 # ---------------------------------------------------------
@@ -769,7 +774,7 @@ if gallery:
                         buf = BytesIO()
                         g_img.save(buf, format="PNG")
                         st.download_button(
-                            label="DL",
+                            label="Download",
                             data=buf.getvalue(),
                             file_name=f"shoot_{idx}.png",
                             mime="image/png",
