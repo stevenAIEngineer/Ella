@@ -239,7 +239,7 @@ st.markdown("""
     /* HIDE DEFAULT ELEMENTS */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
+    /* header {visibility: hidden;}  <-- Removed to show Sidebar Toggle */
 
     /* CUSTOM CONTAINERS */
     .asset-card {
@@ -606,7 +606,7 @@ st.markdown("---")
 # Header & Download All
 gh_col1, gh_col2 = st.columns([5, 1])
 with gh_col1:
-    st.markdown("### RECENT SHOOTS")
+    st.markdown("### PORTFOLIO ARCHIVE")
 
 gallery = load_data("gallery")
 
@@ -630,32 +630,38 @@ with gh_col2:
             st.error(f"Zip error: {e}")
 
 if gallery:
-    g_cols = st.columns(3)
-    for i, item in enumerate(gallery[:3]): # Last 3
-        with g_cols[i]:
-            g_img = base64_to_image(item['image_base64'])
-            if g_img:
-                st.image(g_img, caption=f"{item['timestamp'][:10]}", width="stretch")
-                st.caption(f"{item['prompt'][:30]}...")
-                
-                # Actions Row
-                act_c1, act_c2 = st.columns([2, 1])
-                with act_c1:
-                    buf = BytesIO()
-                    g_img.save(buf, format="PNG")
-                    st.download_button(
-                        label="Download",
-                        data=buf.getvalue(),
-                        file_name=f"ella_shoot_{i}.png",
-                        mime="image/png",
-                        key=f"dl_{i}",
-                        use_container_width=True
-                    )
-                with act_c2:
-                    if st.button("🗑", key=f"del_gal_{i}", help="Remove", use_container_width=True):
-                        gallery.pop(i)
-                        save_data("gallery", gallery)
-                        st.rerun()
+    # SCROLLABLE GALLERY CONTAINER
+    with st.container(height=600):
+        # Grid Layout: Iterate in batches of 3
+        for i in range(0, len(gallery), 3):
+            cols = st.columns(3)
+            batch = gallery[i:i+3]
+            for j, item in enumerate(batch):
+                idx = i + j
+                with cols[j]:
+                    g_img = base64_to_image(item['image_base64'])
+                    if g_img:
+                        st.image(g_img, caption=f"{item['timestamp'][:10]}", use_container_width=True)
+                        st.caption(f"{item['prompt'][:30]}...")
+                        
+                        # Actions Row
+                        act_c1, act_c2 = st.columns([2, 1])
+                        with act_c1:
+                            buf = BytesIO()
+                            g_img.save(buf, format="PNG")
+                            st.download_button(
+                                label="Download",
+                                data=buf.getvalue(),
+                                file_name=f"ella_shoot_{idx}.png",
+                                mime="image/png",
+                                key=f"dl_{idx}",
+                                use_container_width=True
+                            )
+                        with act_c2:
+                            if st.button("🗑", key=f"del_gal_{idx}", help="Remove", use_container_width=True):
+                                gallery.pop(idx)
+                                save_data("gallery", gallery)
+                                st.rerun()
 else:
     st.info("No shoots in portfolio yet.")
 
@@ -751,19 +757,28 @@ Advise the user on how to improve the shoot or suggest creative prompts based on
                     if selected_model:
                         # Handle Dual Ref vs Legacy
                         if 'face_base64' in selected_model:
-                             m_img = base64_to_image(selected_model['face_base64'])
+                             m_img = load_and_resize(selected_model['face_base64'])
                         elif 'image_base64' in selected_model:
-                             m_img = base64_to_image(selected_model['image_base64'])
+                             m_img = load_and_resize(selected_model['image_base64'])
                         else:
                              m_img = None
                         
-                        if m_img: chat_contents.append(m_img)
+                        # Aggressive Chat Optimization: Resize to 512px for speed
+                        if m_img: 
+                            m_img.thumbnail((512, 512))
+                            chat_contents.append(m_img)
+
                     if selected_apparel:
-                        a_img = base64_to_image(selected_apparel['image_base64'])
-                        if a_img: chat_contents.append(a_img)
+                        a_img = load_and_resize(selected_apparel['image_base64'])
+                        if a_img: 
+                            a_img.thumbnail((512, 512))
+                            chat_contents.append(a_img)
+
                     if selected_location:
-                        l_img = base64_to_image(selected_location['image_base64'])
-                        if l_img: chat_contents.append(l_img)
+                        l_img = load_and_resize(selected_location['image_base64'])
+                        if l_img: 
+                            l_img.thumbnail((512, 512))
+                            chat_contents.append(l_img)
 
                     with st.spinner("Cruella is judging you..."):
                         chat_resp = client.models.generate_content(
