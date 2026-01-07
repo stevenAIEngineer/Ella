@@ -607,39 +607,40 @@ with act_col:
                              technical_fabric_desc = analyze_apparel_structure(raw_bytes, client_standard)
                     
                     # 2. Prompt construction
-                    # STRICT PROMPT ENGINEERING FOR CONSISTENCY
-                    final_prompt = f"STRICT INSTRUCTION: Generate a high-fashion photograph based on the following description: {user_prompt}. "
+                    # PIVOT: E-COMMERCE CATALOG STYLE (Consistency > Art)
+                    final_prompt = f"STRICT INSTRUCTION: Generate a commercial e-commerce fashion catalog photograph. "
+                    final_prompt += f" Subject: {user_prompt}. "
                     final_prompt += f" Aspect Ratio: {selected_ar}. "
-                    final_prompt += f" Target Resolution: {resolution.split('(')[0].strip().upper()}. "
-                    final_prompt += "Ensure professional editorial lighting, 8k resolution, highly detailed texture. "
+                    final_prompt += f" Resolution: {resolution.split('(')[0].strip().upper()}. "
+                    final_prompt += "Style: Clean, Commercial, Realistic, Studio Lighting. High consistency like Zara/ASOS product shots. NO artistic filters. NO dramatic shadows. "
                     
                     # Explicit Input Mapping
-                    final_prompt += "\n\nVISUAL INPUT MAPPING (Critical Compliance Required):"
+                    final_prompt += "\n\nVISUAL ASSETS (Strict Adherence):"
                     img_count = 1
                     
                     if model_face_img:
-                        final_prompt += f"\n- Image {img_count}: MODEL FACE REFERENCE (Close-Up). IDENTITY PROTECTION: HIGHEST. You MUST strictly reproduce this exact facial structure, ethnicity, skin tone, and features. DO NOT GENERATE A GENERIC MODEL. USE THIS FACE."
+                        final_prompt += f"\n- Image {img_count}: MODEL IDENTITY (Immutable). You must use this exact person's face. Keep skin tone and facial structure 100% consistent."
                         img_count += 1
                     
                     if model_body_img:
-                        final_prompt += f"\n- Image {img_count}: MODEL BODY REFERENCE (Full Shot). Use this for body type, proportions, and pose guidance."
+                        final_prompt += f"\n- Image {img_count}: BODY REFERENCE. Use this body shape and pose."
                         img_count += 1
                         
                     if apparel_img:
-                        final_prompt += f"\n- Image {img_count}: APPAREL REFERENCE. You MUST reproduce the clothing exactly."
+                        final_prompt += f"\n- Image {img_count}: PRODUCT REFERENCE (Apparel). This is the product being sold. Render it with 100% fidelity to color, texture, and cut."
                         if technical_fabric_desc:
-                            final_prompt += f" TECHNICAL SPECS: {technical_fabric_desc}"
-                        final_prompt += " Draping: GRAVITY-COMPLIANT. The fabric must hang, fold, and stretch realistically based on its material weight. NO floating or stiff artifacts."
+                            final_prompt += f" FABRIC PHYSICS: {technical_fabric_desc}"
+                        final_prompt += " Draping: Natural fit. The fabric must fall realistically on the body."
                         img_count += 1
                     if location_img:
-                        final_prompt += f"\n- Image {img_count}: LOCATION REFERENCE. Use this strict background."
+                        final_prompt += f"\n- Image {img_count}: BACKGROUND. Use this location but keep it slightly soft-focus to prioritize the product."
                         img_count += 1
                     
-                    final_prompt += "\n\nEXECUTION GUIDELINES:"
-                    final_prompt += "\n1. Fuse these elements perfectly. The Model (Face + Body) wearing the Apparel in the Location."
-                    final_prompt += "\n2. IDENTITY LOCK: The final image MUST look exactly like the person in Image 1."
-                    final_prompt += "\n3. Do NOT change the garment's design or fabric. Adapt the fit to the model's pose naturally."
-                    final_prompt += "\n4. Deliver a photorealistic, Vogue-quality masterpiece."
+                    final_prompt += "\n\nOUTPUT REQUIREMENTS:"
+                    final_prompt += "\n1. CATALOG ACCURACY: The Model looks real, the Clothes look real. No AI hallucinations."
+                    final_prompt += "\n2. IDENTITY LOCK: Same model as Image 1."
+                    final_prompt += "\n3. LIGHTING: Even, bright studio lighting to show fabric details clearly."
+                    final_prompt += "\n4. COMPOSITION: Standard fashion product shot. Clean and direct."
                     
                     # 3. Request
                     # Input list for the model (Text + Images)
