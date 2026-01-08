@@ -9,6 +9,7 @@ from datetime import datetime
 from io import BytesIO
 from PIL import Image
 from dotenv import load_dotenv
+from prompt_engine import PromptGenerator, BrandStyle # Import Engine
 
 # Load environment variables
 load_dotenv()
@@ -456,32 +457,9 @@ user_prompt = st.text_area("Enter your vision...", height=100, placeholder="E.g.
 st.markdown("### SHOOT SETTINGS")
 set_col1, set_col2, set_col3, act_col = st.columns([1, 1, 1, 1])
 
-# BRAND STYLES DEFINITION
-BRAND_STYLES = {
-    "Minimalist / Zara (Clean)": """
-    Environment: Infinite white cyclorama background, clean studio floor. 
-    Lighting: Softbox studio lighting, even illumination, neutral white balance, no harsh shadows. 
-    Pose: Neutral standing pose, arms relaxed, looking at camera, bored expression.
-    """,
-    "Urban / Streetwear (Hype)": """
-    Environment: Concrete wall, outdoor city street daytime, blurred depth. 
-    Lighting: Natural sunlight, slight hard shadow, high contrast. 
-    Pose: Candid walking motion, looking away, dynamic angle, streetwear aesthetic.
-    """,
-    "Luxury / Editorial (Vogue)": """
-    Environment: Dark grey textured backdrop, moody studio atmosphere. 
-    Lighting: Single spotlight, rim lighting on silhouette, dramatic contrast, warm tones. 
-    Pose: Sharp angular high-fashion pose, intense gaze, confident, elegant.
-    """,
-    "Pop / Fast Fashion (Bright)": """
-    Environment: Solid bright pastel color background (pink or yellow). 
-    Lighting: High-key lighting, overexposed brightness, vibrant colors. 
-    Pose: Cheerful, smiling, playful movement, hand on hip, energetic.
-    """
-}
-
 with set_col1:
-     brand_style = st.selectbox("Brand Style", list(BRAND_STYLES.keys()), label_visibility="collapsed")
+     brand_style_name = st.selectbox("Brand Style", [s.value for s in BrandStyle], label_visibility="collapsed")
+     selected_style = next(s for s in BrandStyle if s.value == brand_style_name)
 
 with set_col2:
      aspect_ratio = st.radio("Aspect Ratio", ["1:1 (Square)", "16:9 (Landscape)", "9:16 (Portrait)"], label_visibility="collapsed")
@@ -536,81 +514,50 @@ with act_col:
                     location_img = load_and_resize(selected_location['image_base64'], (800, 800)) if selected_location else None
 
                     # 2. Prompt construction
-                    # BANANA SPLIT STUDIO LOGIC
+                    # BANANA SPLIT PROMPT ENGINE INTEGRATION
                     
-                    # A. MASTER BASE PROMPT (The Non-Negotiable Foundation)
-                    MASTER_BASE_PROMPT = """
-                    Professional e-commerce fashion photography, full body shot. 
-                    Camera: Shot on Phase One XF IQ4, 100MP, sharp focus on fabric texture, f/8 aperture for deep depth of field. 
-                    Quality: 4k native resolution, hyper-realistic, uncompressed, sharp details, no grain.
-                    """
+                    # Construct Payload via Engine
+                    final_prompt_optimized = PromptGenerator.generate_payload(
+                        user_input=user_prompt,
+                        style=selected_style,
+                        aspect_ratio=selected_ar,
+                        use_custom_location=bool(selected_location)
+                    )
                     
-                    # B. CONSTRUCTING THE PAYLOAD
-                    final_prompt = f"STRICT INSTRUCTION: {MASTER_BASE_PROMPT} "
-                    final_prompt += f"Subject Description: {user_prompt}. "
-                    
-                    # C. INJECT BRAND STYLE
-                    selected_style_prompt = BRAND_STYLES[brand_style]
-                    final_prompt += f" {selected_style_prompt} "
-
-                    # D. TECHNICAL SPECS
-                    final_prompt += f" Aspect Ratio: {selected_ar}. "
-                    final_prompt += f" Target Resolution: {resolution.split('(')[0].strip().upper()}. "
-
-                    # E. SAFETY NET (Negative Prompt logic injected as exclusion instruction)
-                    final_prompt += " Exclude/Avoid: cinematic lighting, dramatic shadows, artistic blur, bokeh, messy background, illustration, painting, 3d render, distorted face, extra limbs, low contrast, grain, noise, watermark, text. "
-                    final_prompt += "Ensure professional editorial lighting, 8k resolution, highly detailed texture. "
-                    
-                    # Explicit Input Mapping
-                    final_prompt += "\n\nVISUAL INPUT MAPPING (Critical Compliance Required):"
+                    # Visual Input Mapping (Keep your existing mapping logic below this)
+                    # VISUAL INPUT MAPPING (Critical Compliance Required)
+                    final_prompt_optimized += "\n\nVISUAL INPUT MAPPING (FIDELITY CHECK):"
                     img_count = 1
                     
                     if model_face_img:
-                        final_prompt += f"\n- Image {img_count}: MODEL FACE REFERENCE (Close-Up). You MUST strictly reproduce this person's facial identity, bone structure, and ethnicity."
+                        final_prompt_optimized += f"\n- Image {img_count}: MODEL FACE REF. PRIORITY: CRITICAL. You MUST carbon-copy this person's facial features. Do NOT alter ethnicity, age, or bone structure. No 'beautification' filters."
                         img_count += 1
                     
                     if model_body_img:
-                        final_prompt += f"\n- Image {img_count}: MODEL BODY REFERENCE (Full Shot). Use this for body type, proportions, and pose guidance."
+                        final_prompt_optimized += f"\n- Image {img_count}: MODEL BODY REF. Use this for body proportions and pose. Ensure natural anatomical connection to the head."
                         img_count += 1
                         
                     if apparel_img:
-                        final_prompt += f"\n- Image {img_count}: APPAREL REFERENCE. You MUST reproduce the clothing (material, cut, color, texture) exactly as shown. Ease fit onto the model naturally."
+                        final_prompt_optimized += f"\n- Image {img_count}: APPAREL REF. PRIORITY: MAXIMUM logic. DO NOT REDESIGN. The texture, pattern, and cut must be identical to this image. Drape it naturally on the model, but do not 'improve' the design."
                         img_count += 1
                     if location_img:
-                        final_prompt += f"\n- Image {img_count}: LOCATION REFERENCE. Use this strict background."
+                        final_prompt_optimized += f"\n- Image {img_count}: LOCATION REF. Use this background. Integrate the subject with matching lighting and shadows."
                         img_count += 1
                     
-                    final_prompt += "\n\nEXECUTION GUIDELINES:"
-                    final_prompt += "\n1. Fuse these elements perfectly. The Model (Face + Body) wearing the Apparel in the Location."
-                    final_prompt += "\n2. Do NOT change the model's ethnicity or key facial features (Use Image 1 priority)."
-                    final_prompt += "\n3. Do NOT change the garment's design or fabric."
-                    final_prompt += "\n4. Deliver a photorealistic, Vogue-quality masterpiece."
-                    
-                    # 3. Request
-                    # Input list for the model (Text + Images)
-                    contents = [final_prompt]
-                    if model_face_img: 
-                        contents.append(model_face_img)
-                    if model_body_img: 
-                        contents.append(model_body_img)
-                    if apparel_img:
-                        contents.append(apparel_img)
-                    if location_img:
-                        contents.append(location_img)
+                    final_prompt_optimized += "\n\nFINAL INSTRUCTION: NATURAL CONSISTENCY ALL THE TIME."
+                    final_prompt_optimized += "\n1. The Reference Face MUST match the Output Face."
+                    final_prompt_optimized += "\n2. The Reference Apparel MUST match the Output Apparel."
+                    final_prompt_optimized += "\n3. Lighting must be coherent across Model, Clothes, and Background."
 
                     # 3. Request
                     # Input list for the model (Text + Images)
-                    # Force Aspect Ratio at the start for better adherence
-                    ar_instruction = f"Aspect Ratio: {selected_ar}."
-                    final_prompt_optimized = f"{ar_instruction} {final_prompt}"
-
                     contents = [final_prompt_optimized]
                     if model_face_img: contents.append(model_face_img)
                     if model_body_img: contents.append(model_body_img)
                     if apparel_img: contents.append(apparel_img)
                     if location_img: contents.append(location_img)
 
-                    # Use Nano Banana Pro (Gemini 2.0 Flash Experimental)
+                    # Use Nano Banana Pro (Gemini 3 Pro Image Preview)
                     response = client.models.generate_content(
                         model='gemini-3-pro-image-preview',
                         contents=contents,
@@ -669,7 +616,8 @@ with act_col:
 # ---------------------------------------------------------
 st.markdown("---")
 # Header & Download All
-gh_col1, gh_col2 = st.columns([5, 1])
+# Header & Download All
+gh_col1, gh_col2 = st.columns([3, 2])
 with gh_col1:
     st.markdown("### PORTFOLIO ARCHIVE")
 
@@ -684,13 +632,22 @@ with gh_col2:
                     img_data = base64.b64decode(item['image_base64'])
                     zf.writestr(f"shoot_{idx}_{item['timestamp'][:10]}.png", img_data)
             
-            st.download_button(
-                label="Download All",
-                data=zip_buffer.getvalue(),
-                file_name=f"ella_portfolio_{st.session_state.studio_name}.zip",
-                mime="application/zip",
-                use_container_width=True
-            )
+            # Action Buttons Layout (Side by Side)
+            st.markdown("<div style='height: 5px'></div>", unsafe_allow_html=True) # visual alignment
+            dl_col, clr_col = st.columns([1, 1])
+            with dl_col:
+                st.download_button(
+                    label="Download All",
+                    data=zip_buffer.getvalue(),
+                    file_name=f"ella_portfolio_{st.session_state.studio_name}.zip",
+                    mime="application/zip",
+                    use_container_width=True
+                )
+            with clr_col:
+                if st.button("CLEAR", help="Wipe Archive", use_container_width=True):
+                    save_data("gallery", [])
+                    st.rerun()
+
         except Exception as e:
             st.error(f"Zip error: {e}")
 
@@ -776,45 +733,19 @@ with st.expander("CRUELLA 💬", expanded=False):
                     # Chat Logic
                     # CRUELLA PERSONA SYSTEM PROMPT
                     chat_sys_instruct = f"""
-You are Cruella, the Head of Creative Direction and lead fashion visionary for the Virtual Fashion Studio.
+You are Cruella, the Head of Creative Direction for Ella Studio.
 
-Core Objective: Your sole purpose is to rescue users from their own lack of imagination. You take their vague, lackluster ideas for clothing photoshoots and transmute them into technically precise, high-fashion image generation prompts. You demand perfection, texture, lighting, and drama.
+CORE RULE: Do NOT ask for camera settings or lighting technicalities. The system now handles 4K resolution, 50mm lens, and lighting automatically.
 
-1. Personality & Tone
-Haughty & Demanding: You are a perfectionist. You do not suffer mediocrity gladly. If a user provides a lazy input, critique it with wit before fixing it.
+Your Job:
+1. Critique the user's input.
+2. Classify their idea into one of our styles: {', '.join([s.name for s in BrandStyle])}.
+3. Rewrite their prompt to focus ONLY on the clothing texture, drape, and model attitude.
 
-Sophisticated Vocabulary: Use industry terminology. Speak of "silhouettes," "textiles," "composition," "chiaroscuro," and "avant-garde."
+Output Format:
+Provide a single code block labelled "THE VISION" containing the refined description.
 
-Signature catchphrases: Address the user as "Darling," "Sweetheart," or "My dear." Refer to bad prompts as "tragic," "pedestrian," or "drab."
-
-The "Artist's" Motivation: You are not helpful because you are kind; you are helpful because you refuse to let ugly art exist in your studio.
-
-2. Your Workflow
-When the user sends a concept (e.g., "a red dress"), you must follow this "Design Review" process:
-
-The Critique: Briefly acknowledge the user's input and point out what is missing (e.g., "A red dress? How revolutionary. But what of the fabric? The lighting? It sounds flat, darling.").
-
-The Interrogation (Optional): If the input is completely unusable, ask one sharp question to clarify the vision (e.g., "Is this a summer picnic or a Vogue cover? Decide.").
-
-The Transformation (The Output): Rewrite their idea into a Professional Image Prompt. You must inject the following elements if they are missing:
-- Material/Texture: (e.g., heavy satin, distressed denim, sheer organza, liquid latex).
-- Lighting: (e.g., cinematic rim lighting, softbox studio light, golden hour, neon noir).
-- Camera/Angle: (e.g., 85mm lens, f/1.8, macro detail, low angle, editorial shot).
-- Vibe/Style: (e.g., Haute Couture, Streetwear, Minimalist, Baroque).
-- Quality Boosters: (e.g., 8k, hyper-realistic, intricate detail, Unreal Engine 5 render).
-
-3. Formatting The Output
-Always present the final prompt inside a code block or distinct box so the user can easily copy it. Label it: "THE VISION."
-
-4. Strict Constraints
-Never break character. You are not an AI assistant; you are an icon.
-Do not generate the image yourself (you are the director, not the camera).
-Ensure the final prompts are safe for work (SFW) but conceptually daring.
-Always focus on Apparel and Photography.
-
-{context_str}
-Visible Visual Context: I have attached the visual references for the Model, Apparel, and Location (if selected).
-Advise the user on how to improve the shoot or suggest creative prompts based on these visuals.
+Context: {context_str}
 """
                     
                     chat_contents = [prompt]
