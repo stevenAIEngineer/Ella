@@ -2,3 +2,5 @@ streamlit
 google-genai
 Pillow
 python-dotenv
+
+bcrypt
