@@ -127,6 +127,19 @@ def base64_to_image(base64_string: str) -> Optional[Image.Image]:
     except Exception:
         return None
 
+def load_and_resize(b64_str, max_size=None):
+    """Load base64 image and optionally resize it."""
+    if not b64_str: return None
+    img = base64_to_image(b64_str)
+    if img:
+        # Convert to RGB to ensure compatibility
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        # Resize if max_size is provided (tuple)
+        if max_size:
+            img.thumbnail(max_size)
+    return img
+
 # Initialize User DB
 ensure_user_data()
 
@@ -288,6 +301,7 @@ def render_model_tab(tab_name):
         # Upload
         with st.expander("Upload New Model", expanded=False):
             new_name = st.text_input("Model Name", key="name_roster")
+            st.caption("📷 Best: 1024x1024px. Square crop for Face. Portrait for Body.")
             face_file = st.file_uploader("Face Ref (Close-up)", type=['png', 'jpg', 'jpeg'], key="file_face_roster")
             body_file = st.file_uploader("Body Ref (Full Shot)", type=['png', 'jpg', 'jpeg'], key="file_body_roster")
             
@@ -329,6 +343,7 @@ def render_asset_tab(tab_name, data_key, label_singular):
         # Upload
         with st.expander(f"Upload New {label_singular}", expanded=False):
             new_name = st.text_input(f"Name", key=f"name_{data_key}")
+            st.caption("📷 Best: ~1000px on longest side. Avoid 4K uploads.")
             new_file = st.file_uploader(f"Image", type=['png', 'jpg', 'jpeg'], key=f"file_{data_key}")
             
             if st.button(f"Save {label_singular}", key=f"save_{data_key}"):
@@ -477,30 +492,21 @@ with act_col:
             with st.spinner("Compiling scene..."):
                 try:
                     # 1. Image preparation & Optimization
-                    def load_and_resize(b64_str):
-                        if not b64_str: return None
-                        img = base64_to_image(b64_str)
-                        if img:
-                            # Convert to RGB (Remove Alpha Channel if present, as it can cause 500s)
-                            if img.mode != 'RGB':
-                                img = img.convert('RGB')
-                            # Resize to max 800px to be safe
-                            img.thumbnail((800, 800))
-                        return img
-
+                    # Using global load_and_resize
                     model_face_img = None
                     model_body_img = None
                     
                     if selected_model:
                         if 'face_base64' in selected_model and 'body_base64' in selected_model:
-                             model_face_img = load_and_resize(selected_model['face_base64'])
-                             model_body_img = load_and_resize(selected_model['body_base64'])
+                             # Generation needs slightly larger limits (800 or 1024)
+                             model_face_img = load_and_resize(selected_model['face_base64'], (800, 800))
+                             model_body_img = load_and_resize(selected_model['body_base64'], (800, 800))
                         elif 'image_base64' in selected_model:
                              # Legacy fallback
-                             model_body_img = load_and_resize(selected_model['image_base64'])
+                             model_body_img = load_and_resize(selected_model['image_base64'], (800, 800))
                     
-                    apparel_img = load_and_resize(selected_apparel['image_base64'])
-                    location_img = load_and_resize(selected_location['image_base64']) if selected_location else None
+                    apparel_img = load_and_resize(selected_apparel['image_base64'], (800, 800))
+                    location_img = load_and_resize(selected_location['image_base64'], (800, 800)) if selected_location else None
 
                     # 2. Prompt construction
                     # STRICT PROMPT ENGINEERING FOR CONSISTENCY
@@ -757,28 +763,22 @@ Advise the user on how to improve the shoot or suggest creative prompts based on
                     if selected_model:
                         # Handle Dual Ref vs Legacy
                         if 'face_base64' in selected_model:
-                             m_img = load_and_resize(selected_model['face_base64'])
+                             # Use smaller 512px for chat context
+                             m_img = load_and_resize(selected_model['face_base64'], (512, 512))
                         elif 'image_base64' in selected_model:
-                             m_img = load_and_resize(selected_model['image_base64'])
+                             m_img = load_and_resize(selected_model['image_base64'], (512, 512))
                         else:
                              m_img = None
                         
-                        # Aggressive Chat Optimization: Resize to 512px for speed
-                        if m_img: 
-                            m_img.thumbnail((512, 512))
-                            chat_contents.append(m_img)
+                        if m_img: chat_contents.append(m_img)
 
                     if selected_apparel:
-                        a_img = load_and_resize(selected_apparel['image_base64'])
-                        if a_img: 
-                            a_img.thumbnail((512, 512))
-                            chat_contents.append(a_img)
+                        a_img = load_and_resize(selected_apparel['image_base64'], (512, 512))
+                        if a_img: chat_contents.append(a_img)
 
                     if selected_location:
-                        l_img = load_and_resize(selected_location['image_base64'])
-                        if l_img: 
-                            l_img.thumbnail((512, 512))
-                            chat_contents.append(l_img)
+                        l_img = load_and_resize(selected_location['image_base64'], (512, 512))
+                        if l_img: chat_contents.append(l_img)
 
                     with st.spinner("Cruella is judging you..."):
                         chat_resp = client.models.generate_content(
