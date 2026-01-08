@@ -19,7 +19,7 @@ class BrandStyle(Enum):
         return ""
 
 class PromptGenerator:
-    # 50mm lens and 'visible headroom' fixes the vertical stretching issue
+    # Base prompt with 50mm lens setup
     MASTER_BASE_PROMPT = (
         "Professional e-commerce fashion photography, wide shot, rule of thirds composition. "
         "Framing: Model is centered with visible headroom above and floor space below. "

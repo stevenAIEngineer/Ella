@@ -14,9 +14,7 @@ from prompt_engine import PromptGenerator, BrandStyle # Import Engine
 # Load environment variables
 load_dotenv()
 
-# ---------------------------------------------------------
-# 1. SETUP & CONFIGURATION
-# ---------------------------------------------------------
+# App Setup
 st.set_page_config(
     page_title="Ella Studio",
     page_icon="✨",
@@ -24,9 +22,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ---------------------------------------------------------
-# 2. SESSION & AUTHENTICATION
-# ---------------------------------------------------------
+# Session handling
 if "studio_name" not in st.session_state:
     st.session_state.studio_name = None
 
@@ -58,9 +54,7 @@ if not st.session_state.studio_name:
     login_screen()
     st.stop()
 
-# ---------------------------------------------------------
-# 3. DATA PERSISTENCE (USER ISOLATED)
-# ---------------------------------------------------------
+# User data path
 USER_DATA_DIR = os.path.join("data", st.session_state.studio_name)
 
 FILES = {
@@ -144,9 +138,7 @@ def load_and_resize(b64_str, max_size=None):
 # Initialize User DB
 ensure_user_data()
 
-# ---------------------------------------------------------
-# 4. GOOGLE GENAI CLIENT
-# ---------------------------------------------------------
+# GenAI Client
 api_key = os.getenv("GOOGLE_API_KEY") 
 
 try:
@@ -167,9 +159,7 @@ except ImportError:
     st.error("`google-genai` library not installed. Please install it.")
     client = None
 
-# ---------------------------------------------------------
-# 5. DESIGN SYSTEM
-# ---------------------------------------------------------
+# Custom CSS
 st.markdown("""
 <style>
     /* IMPORT FONTS */
@@ -284,9 +274,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------------------------------------------------
-# 6. SIDEBAR: "THE VAULT"
-# ---------------------------------------------------------
+# Sidebar logic
 st.sidebar.title(f"STUDIO: {st.session_state.studio_name.upper()}")
 st.sidebar.markdown("---")
 if st.sidebar.button("LOGOUT / SWITCH STUDIO", key="logout"):
@@ -376,9 +364,7 @@ render_model_tab(tab_models)
 render_asset_tab(tab_apparel, "closet", "Apparel")
 render_asset_tab(tab_locations, "locations", "Location")
 
-# ---------------------------------------------------------
-# 7. MAIN STAGE: "THE FUSION STUDIO"
-# ---------------------------------------------------------
+# Main Interface
 st.title("ELLA STUDIO")
 st.markdown(f"*Monochrome Luxury Edition | Active Session: {st.session_state.studio_name}*")
 st.markdown("---")
@@ -513,10 +499,7 @@ with act_col:
                     apparel_img = load_and_resize(selected_apparel['image_base64'], (800, 800))
                     location_img = load_and_resize(selected_location['image_base64'], (800, 800)) if selected_location else None
 
-                    # 2. Prompt construction
-                    # BANANA SPLIT PROMPT ENGINE INTEGRATION
-                    
-                    # Construct Payload via Engine
+                    # Construct Payload
                     final_prompt_optimized = PromptGenerator.generate_payload(
                         user_input=user_prompt,
                         style=selected_style,
@@ -524,8 +507,7 @@ with act_col:
                         use_custom_location=bool(selected_location)
                     )
                     
-                    # Visual Input Mapping (Keep your existing mapping logic below this)
-                    # VISUAL INPUT MAPPING (Critical Compliance Required)
+                    # Strict fidelity mapping
                     final_prompt_optimized += "\n\nVISUAL INPUT MAPPING (FIDELITY CHECK):"
                     img_count = 1
                     
@@ -557,7 +539,7 @@ with act_col:
                     if apparel_img: contents.append(apparel_img)
                     if location_img: contents.append(location_img)
 
-                    # Use Nano Banana Pro (Gemini 3 Pro Image Preview)
+                    # Call API
                     response = client.models.generate_content(
                         model='gemini-3-pro-image-preview',
                         contents=contents,
@@ -687,9 +669,7 @@ if gallery:
 else:
     st.info("No shoots in portfolio yet.")
 
-# ---------------------------------------------------------
-# 9. CRUELLA (CONTEXT-AWARE CHATBOT)
-# ---------------------------------------------------------
+# Chatbot section
 st.markdown("<br><br>", unsafe_allow_html=True)
 with st.expander("CRUELLA 💬", expanded=False):
     st.caption("Your Creative Director")
@@ -730,8 +710,7 @@ with st.expander("CRUELLA 💬", expanded=False):
         with st.chat_message("assistant"):
             if client:
                 try:
-                    # Chat Logic
-                    # CRUELLA PERSONA SYSTEM PROMPT
+                    # Cruella Persona prompt
                     chat_sys_instruct = f"""
 You are Cruella, the Head of Creative Direction for Ella Studio.
 
