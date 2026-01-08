@@ -10,6 +10,10 @@ from io import BytesIO
 from PIL import Image
 from dotenv import load_dotenv
 from prompt_engine import PromptGenerator, BrandStyle # Import Engine
+import db_manager as db
+
+# Initialize DB
+db.init_db()
 
 # Load environment variables
 load_dotenv()
@@ -23,6 +27,8 @@ st.set_page_config(
 )
 
 # Session handling
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
 if "studio_name" not in st.session_state:
     st.session_state.studio_name = None
 
@@ -41,64 +47,50 @@ def login_screen():
         st.markdown("<h3 style='text-align: center; color: #888;'>Monochrome Luxury Edition</h3>", unsafe_allow_html=True)
         st.markdown("---")
         
-        studio_input = st.text_input("ENTER STUDIO NAME", placeholder="Type your name to begin...")
+        tab_login, tab_reg = st.tabs(["LOGIN", "REGISTER"])
         
-        if st.button("ENTER THE VAULT", use_container_width=True):
-            if studio_input.strip():
-                st.session_state.studio_name = studio_input.strip()
-                st.rerun()
-            else:
-                st.error("Identity required.")
+        with tab_login:
+            l_user = st.text_input("Username", key="l_u")
+            l_pass = st.text_input("Password", type="password", key="l_p")
+            if st.button("ENTER VAULT", use_container_width=True):
+                uid = db.login_user(l_user, l_pass)
+                if uid:
+                    st.session_state.user_id = uid
+                    st.session_state.studio_name = l_user
+                    st.rerun()
+                else:
+                    st.error("Invalid credentials.")
+            
+            # Forgot Password Logic
+            if st.button("Forgot Password?", type="tertiary"):
+                if l_user:
+                    hint = db.get_user_hint(l_user)
+                    if hint:
+                        st.info(f"💡 HINT: {hint}")
+                    else:
+                        st.warning("No user found or no hint set.")
+                else:
+                    st.warning("Enter username first.")
+        
+        with tab_reg:
+            r_user = st.text_input("Choose Username", key="r_u")
+            r_pass = st.text_input("Choose Password", type="password", key="r_p")
+            r_hint = st.text_input("Password Hint (Optional)", key="r_h", placeholder="Something to help you remember...")
+            
+            if st.button("CREATE STUDIO", use_container_width=True):
+                if r_user and r_pass:
+                    success, msg = db.create_user(r_user, r_pass, r_hint)
+                    if success:
+                        st.success("Studio created! Please login.")
+                    else:
+                        st.error(msg)
+                else:
+                    st.error("Fields required.")
 
-if not st.session_state.studio_name:
+if not st.session_state.user_id:
     login_screen()
     st.stop()
 
-# User data path
-USER_DATA_DIR = os.path.join("data", st.session_state.studio_name)
-
-FILES = {
-    "roster": os.path.join(USER_DATA_DIR, "roster.json"),
-    "closet": os.path.join(USER_DATA_DIR, "closet.json"),
-    "locations": os.path.join(USER_DATA_DIR, "locations.json"),
-    "gallery": os.path.join(USER_DATA_DIR, "gallery.json"),
-}
-
-@dataclass
-class Asset:
-    name: str
-    image_base64: str
-
-@dataclass
-class GalleryItem:
-    prompt: str
-    image_base64: str
-    timestamp: str
-
-def ensure_user_data():
-    """Ensure user specific data directory and JSON files exist."""
-    if not os.path.exists(USER_DATA_DIR):
-        os.makedirs(USER_DATA_DIR)
-    
-    for key, filepath in FILES.items():
-        if not os.path.exists(filepath):
-            with open(filepath, 'w') as f:
-                json.dump([], f)
-
-def load_data(key: str) -> List[Dict]:
-    """Load data from JSON file."""
-    filepath = FILES[key]
-    try:
-        with open(filepath, 'r') as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
-
-def save_data(key: str, data: List[Dict]):
-    """Save data to JSON file."""
-    filepath = FILES[key]
-    with open(filepath, 'w') as f:
-        json.dump(data, f, indent=2)
 
 def image_to_base64(uploaded_file) -> str:
     """Convert uploaded file to base64 string."""
@@ -136,7 +128,7 @@ def load_and_resize(b64_str, max_size=None):
     return img
 
 # Initialize User DB
-ensure_user_data()
+
 
 # GenAI Client
 api_key = os.getenv("GOOGLE_API_KEY") 
@@ -278,14 +270,30 @@ st.markdown("""
 st.sidebar.title(f"STUDIO: {st.session_state.studio_name.upper()}")
 st.sidebar.markdown("---")
 if st.sidebar.button("LOGOUT / SWITCH STUDIO", key="logout"):
+    st.session_state.user_id = None
     st.session_state.studio_name = None
     st.rerun()
+st.sidebar.markdown("---")
+
+# Admin Console
+with st.sidebar.expander("ADMIN CONSOLE", expanded=False):
+    st.caption("User Roster (Passwords Encrypted)")
+    all_users = db.get_all_users()
+    if all_users:
+        # Simple table
+        for u in all_users:
+            st.markdown(f"**{u['username']}**")
+            st.caption(f"Hint: {u['password_hint'] if u['password_hint'] else 'None'}")
+            st.markdown("---")
+    else:
+        st.info("No users yet.")
+
 st.sidebar.markdown("---")
 
 tab_models, tab_apparel, tab_locations = st.sidebar.tabs(["MODELS", "APPAREL", "LOCATIONS"])
 
 def render_model_tab(tab_name):
-    assets = load_data("roster")
+    assets = db.get_models(st.session_state.user_id)
     with tab_name:
         # Upload
         with st.expander("Upload New Model", expanded=False):
@@ -298,14 +306,8 @@ def render_model_tab(tab_name):
                 if new_name and face_file and body_file:
                     face_b64 = image_to_base64(face_file)
                     body_b64 = image_to_base64(body_file)
-                    # New Structure
-                    assets.append({
-                        "name": new_name,
-                        "face_base64": face_b64,
-                        "body_base64": body_b64,
-                        "type": "dual_ref"
-                    })
-                    save_data("roster", assets)
+                    
+                    db.add_model(st.session_state.user_id, new_name, face_b64, body_b64)
                     st.success("Saved.")
                     st.rerun()
                 else:
@@ -316,30 +318,28 @@ def render_model_tab(tab_name):
         if not assets:
             st.caption("No models found.")
         
-        for i, asset in enumerate(assets):
+        for asset in assets:
             col1, col2 = st.columns([3, 1])
             with col1:
                 st.text(asset['name'])
             with col2:
-                if st.button("x", key=f"del_roster_{i}", help="Delete"):
-                    assets.pop(i)
-                    save_data("roster", assets)
+                if st.button("x", key=f"del_roster_{asset['id']}", help="Delete"):
+                    db.delete_model(asset['id'])
                     st.rerun()
 
-def render_asset_tab(tab_name, data_key, label_singular):
-    assets = load_data(data_key)
+def render_asset_tab(tab_name, category_code, label_singular):
+    assets = db.get_assets(st.session_state.user_id, category_code)
     with tab_name:
         # Upload
         with st.expander(f"Upload New {label_singular}", expanded=False):
-            new_name = st.text_input(f"Name", key=f"name_{data_key}")
+            new_name = st.text_input(f"Name", key=f"name_{category_code}")
             st.caption("📷 Best: ~1000px on longest side. Avoid 4K uploads.")
-            new_file = st.file_uploader(f"Image", type=['png', 'jpg', 'jpeg'], key=f"file_{data_key}")
+            new_file = st.file_uploader(f"Image", type=['png', 'jpg', 'jpeg'], key=f"file_{category_code}")
             
-            if st.button(f"Save {label_singular}", key=f"save_{data_key}"):
+            if st.button(f"Save {label_singular}", key=f"save_{category_code}"):
                 if new_name and new_file:
                     b64 = image_to_base64(new_file)
-                    assets.append(asdict(Asset(name=new_name, image_base64=b64)))
-                    save_data(data_key, assets)
+                    db.add_asset(st.session_state.user_id, category_code, new_name, b64)
                     st.success("Saved.")
                     st.rerun()
                 else:
@@ -350,14 +350,13 @@ def render_asset_tab(tab_name, data_key, label_singular):
         if not assets:
             st.caption("No assets found.")
         
-        for i, asset in enumerate(assets):
+        for asset in assets:
             col1, col2 = st.columns([3, 1])
             with col1:
                 st.text(asset['name'])
             with col2:
-                if st.button("x", key=f"del_{data_key}_{i}", help="Delete"):
-                    assets.pop(i)
-                    save_data(data_key, assets)
+                if st.button("x", key=f"del_{category_code}_{asset['id']}", help="Delete"):
+                    db.delete_asset(asset['id'])
                     st.rerun()
 
 render_model_tab(tab_models)
@@ -370,12 +369,9 @@ st.markdown(f"*Monochrome Luxury Edition | Active Session: {st.session_state.stu
 st.markdown("---")
 
 # Load all assets for selection
-models = load_data("roster")
-apparel = load_data("closet")
-locations = load_data("locations")
-
-# -- Selection Row --
-col_m, col_a, col_l = st.columns(3)
+models = db.get_models(st.session_state.user_id)
+apparel = db.get_assets(st.session_state.user_id, "closet")
+locations = db.get_assets(st.session_state.user_id, "location")
 
 def selection_card(col, title, assets, key_prefix):
     selected = None
@@ -427,123 +423,406 @@ def selection_card_model(col, title, assets):
             """, unsafe_allow_html=True)
     return selected
 
-selected_model = selection_card_model(col_m, "MODEL", models)
-selected_apparel = selection_card(col_a, "APPAREL", apparel, "apparel")
-selected_location = selection_card(col_l, "LOCATION", locations, "location")
+# TABS
+main_tab1, main_tab2 = st.tabs(["Apparel Shoot", "Accessories"])
 
-st.markdown("---")
+with main_tab1:
+    # -- Selection Row --
+    col_m, col_a, col_l = st.columns(3)
+    selected_model = selection_card_model(col_m, "MODEL", models)
+    selected_apparel = selection_card(col_a, "APPAREL", apparel, "apparel")
+    selected_location = selection_card(col_l, "LOCATION", locations, "location")
 
-# -- Input & Settings --
-st.markdown("### CREATIVE BRIEF")
-user_prompt = st.text_area("Enter your vision...", height=100, placeholder="E.g., High fashion portrait, dynamic pose, moody lighting...")
+    st.markdown("---")
 
-# -- Generation Logic --
-# Layout: Left (Inputs/Settings) | Center (Action) | Right (Output) - Simplified
-# Redesigning Generation Row for Aspect Ratio & Resolution
-st.markdown("### SHOOT SETTINGS")
-set_col1, set_col2, set_col3, act_col = st.columns([1, 1, 1, 1])
+    # -- Input & Settings --
+    st.markdown("### CREATIVE BRIEF")
+    user_prompt = st.text_area("Enter your vision...", height=100, placeholder="E.g., High fashion portrait, dynamic pose, moody lighting...")
 
-with set_col1:
-     brand_style_name = st.selectbox("Brand Style", [s.value for s in BrandStyle], label_visibility="collapsed")
-     selected_style = next(s for s in BrandStyle if s.value == brand_style_name)
+    # -- Generation Logic --
+    st.markdown("### SHOOT SETTINGS")
+    set_col1, set_col2, set_col3, act_col = st.columns([1, 1, 1, 1])
 
-with set_col2:
-     aspect_ratio = st.radio("Aspect Ratio", ["1:1 (Square)", "16:9 (Landscape)", "9:16 (Portrait)"], label_visibility="collapsed")
+    with set_col1:
+         brand_style_name = st.selectbox("Brand Style", [s.value for s in BrandStyle], label_visibility="collapsed")
+         selected_style = next(s for s in BrandStyle if s.value == brand_style_name)
 
-with set_col2:
-    resolution = st.radio("Resolution", ["Standard (1K)", "Pro (2K)", "Ultra (4K)"], label_visibility="collapsed")
+    with set_col2:
+         aspect_ratio = st.radio("Aspect Ratio", ["1:1 (Square)", "16:9 (Landscape)", "9:16 (Portrait)"], label_visibility="collapsed")
 
-generated_image = None
-ar_map = {
-    "1:1 (Square)": "1:1",
-    "16:9 (Landscape)": "16:9",
-    "9:16 (Portrait)": "9:16"
-}
-selected_ar = ar_map[aspect_ratio]
+    with set_col2:
+        resolution = st.radio("Resolution", ["Standard (1K)", "Pro (2K)", "Ultra (4K)"], label_visibility="collapsed")
 
-# Cost Calculation
-cost_map = {
-    "Standard (1K)": "~$0.14",
-    "Pro (2K)": "~$0.14", 
-    "Ultra (4K)": "~$0.25"
-}
-est_cost = cost_map[resolution]
+    ar_map = {
+        "1:1 (Square)": "1:1",
+        "16:9 (Landscape)": "16:9",
+        "9:16 (Portrait)": "9:16"
+    }
+    selected_ar = ar_map[aspect_ratio]
 
-with act_col:
-    st.markdown("<div style='height: 24px'></div>", unsafe_allow_html=True) # Spacer
-    if st.button("INITIATE SHOOT", use_container_width=True):
-        st.caption(f"Est: {est_cost} | {selected_ar} | {resolution.split('(')[1][:-1]}")
-        if not client:
-            st.error("AI Client not initialized.")
-        elif not user_prompt:
-            st.error("Please provide a prompt.")
-        elif not selected_model or not selected_apparel:
-            st.error("Model and Apparel are required.")
+    # Cost Calculation
+    cost_map = {
+        "Standard (1K)": "~$0.14",
+        "Pro (2K)": "~$0.14", 
+        "Ultra (4K)": "~$0.25"
+    }
+    est_cost = cost_map[resolution]
+
+    with act_col:
+        st.markdown("<div style='height: 24px'></div>", unsafe_allow_html=True) # Spacer
+        if st.button("INITIATE SHOOT", use_container_width=True):
+            st.caption(f"Est: {est_cost} | {selected_ar} | {resolution.split('(')[1][:-1]}")
+            if not client:
+                st.error("AI Client not initialized.")
+            elif not user_prompt:
+                st.error("Please provide a prompt.")
+            elif not selected_model or not selected_apparel:
+                st.error("Model and Apparel are required.")
+            else:
+                with st.spinner("Compiling scene..."):
+                    try:
+                        # 1. Image preparation & Optimization
+                        # Using global load_and_resize
+                        model_face_img = None
+                        model_body_img = None
+                        
+                        if selected_model:
+                            if 'face_base64' in selected_model and 'body_base64' in selected_model:
+                                 # Generation needs slightly larger limits (800 or 1024)
+                                 model_face_img = load_and_resize(selected_model['face_base64'], (800, 800))
+                                 model_body_img = load_and_resize(selected_model['body_base64'], (800, 800))
+                            elif 'image_base64' in selected_model:
+                                 # Legacy fallback
+                                 model_body_img = load_and_resize(selected_model['image_base64'], (800, 800))
+                        
+                        apparel_img = load_and_resize(selected_apparel['image_base64'], (800, 800))
+                        location_img = load_and_resize(selected_location['image_base64'], (800, 800)) if selected_location else None
+
+                        # Construct Payload
+                        final_prompt_optimized = PromptGenerator.generate_payload(
+                            user_input=user_prompt,
+                            style=selected_style,
+                            aspect_ratio=selected_ar,
+                            use_custom_location=bool(selected_location)
+                        )
+                        
+                        # Strict fidelity mapping
+                        final_prompt_optimized += "\\n\\nVISUAL INPUT MAPPING (FIDELITY CHECK):"
+                        img_count = 1
+                        
+                        if model_face_img:
+                            final_prompt_optimized += f"\\n- Image {img_count}: MODEL FACE REF. PRIORITY: CRITICAL. You MUST carbon-copy this person's facial features. Do NOT alter ethnicity, age, or bone structure. No 'beautification' filters."
+                            img_count += 1
+                        
+                        if model_body_img:
+                            final_prompt_optimized += f"\\n- Image {img_count}: MODEL BODY REF. Use this for body proportions and pose. Ensure natural anatomical connection to the head."
+                            img_count += 1
+                            
+                        if apparel_img:
+                            final_prompt_optimized += f"\\n- Image {img_count}: APPAREL REF. PRIORITY: MAXIMUM logic. DO NOT REDESIGN. The texture, pattern, and cut must be identical to this image. Drape it naturally on the model, but do not 'improve' the design."
+                            img_count += 1
+                        if location_img:
+                            final_prompt_optimized += f"\\n- Image {img_count}: LOCATION REF. Use this background. Integrate the subject with matching lighting and shadows."
+                            img_count += 1
+                        
+                        final_prompt_optimized += "\\n\\nFINAL INSTRUCTION: NATURAL CONSISTENCY ALL THE TIME."
+                        final_prompt_optimized += "\\n1. The Reference Face MUST match the Output Face."
+                        final_prompt_optimized += "\\n2. The Reference Apparel MUST match the Output Apparel."
+                        final_prompt_optimized += "\\n3. Lighting must be coherent across Model, Clothes, and Background."
+
+                        # 3. Request
+                        # Input list for the model (Text + Images)
+                        contents = [final_prompt_optimized]
+                        if model_face_img: contents.append(model_face_img)
+                        if model_body_img: contents.append(model_body_img)
+                        if apparel_img: contents.append(apparel_img)
+                        if location_img: contents.append(location_img)
+
+                        # Call API
+                        response = client.models.generate_content(
+                            model='gemini-3-pro-image-preview',
+                            contents=contents,
+                            config=types.GenerateContentConfig(
+                                safety_settings=[types.SafetySetting(
+                                    category="HARM_CATEGORY_DANGEROUS_CONTENT",
+                                    threshold="BLOCK_ONLY_HIGH"
+                                )]
+                            )
+                        )
+                        
+                        # Process response (Gemini 3 returns image in parts)
+                        generated_pil = None
+                        
+                        if response.parts:
+                            for part in response.parts:
+                                if part.inline_data:
+                                    try:
+                                        if isinstance(part.inline_data.data, bytes):
+                                            generated_pil = Image.open(BytesIO(part.inline_data.data))
+                                        else:
+                                            # Decode base64 if needed
+                                            image_data = base64.b64decode(part.inline_data.data)
+                                            generated_pil = Image.open(BytesIO(image_data))
+                                        break
+                                    except Exception as img_err:
+                                         st.error(f"Failed to decode output: {img_err}")
+                                elif hasattr(part, 'text') and part.text and "http" in part.text:
+                                    st.warning("Received link instead of image: " + part.text)
+                        
+                        if generated_pil:
+                            st.success("SHOOT COMPLETE")
+                            st.image(generated_pil, caption="Final Result", width="stretch")
+                            
+                            # Save to Gallery
+                            res_buffer = BytesIO()
+                            generated_pil.save(res_buffer, format="PNG")
+                            b64_res = base64.b64encode(res_buffer.getvalue()).decode('utf-8')
+                            
+                            db.add_gallery_item(st.session_state.user_id, 'apparel', user_prompt, b64_res)
+                            
+                        else:
+                            st.error("No valid image data returned.")
+    
+                    except Exception as e:
+                        st.error(f"Generation failed: {str(e)}")
+
+    # ---------------------------------------------------------
+    # 8. THE GALLERY ("PORTFOLIO")
+    # ---------------------------------------------------------
+    st.markdown("---")
+    # Header & Download All
+    gh_col1, gh_col2 = st.columns([3, 2])
+    with gh_col1:
+        st.markdown("### PORTFOLIO ARCHIVE")
+
+    gallery = db.get_gallery(st.session_state.user_id, 'apparel')
+
+    with gh_col2:
+        if gallery:
+            try:
+                zip_buffer = BytesIO()
+                with zipfile.ZipFile(zip_buffer, "w") as zf:
+                    for idx, item in enumerate(gallery):
+                        img_data = base64.b64decode(item['image_base64'])
+                        zf.writestr(f"shoot_{idx}_{item['timestamp'][:10]}.png", img_data)
+                
+                # Action Buttons Layout (Side by Side)
+                st.markdown("<div style='height: 5px'></div>", unsafe_allow_html=True) # visual alignment
+                dl_col, clr_col = st.columns([1, 1])
+                with dl_col:
+                    st.download_button(
+                        label="Download All",
+                        data=zip_buffer.getvalue(),
+                        file_name=f"ella_portfolio_{st.session_state.studio_name}.zip",
+                        mime="application/zip",
+                        use_container_width=True
+                    )
+                with clr_col:
+                    if st.button("CLEAR", help="Wipe Archive", use_container_width=True):
+                        db.clear_gallery(st.session_state.user_id, 'apparel')
+                        st.rerun()
+
+            except Exception as e:
+                st.error(f"Zip error: {e}")
+
+    if gallery:
+        # SCROLLABLE GALLERY CONTAINER
+        with st.container(height=600):
+            # Grid Layout: Iterate in batches of 3
+            for i in range(0, len(gallery), 3):
+                cols = st.columns(3)
+                batch = gallery[i:i+3]
+                for j, item in enumerate(batch):
+                    idx = i + j
+                    with cols[j]:
+                        g_img = base64_to_image(item['image_base64'])
+                        if g_img:
+                            st.image(g_img, caption=f"{item['timestamp'][:10]}", use_container_width=True)
+                            st.caption(f"{item['prompt'][:30]}...")
+                            
+                            # Actions Row
+                            act_c1, act_c2 = st.columns([2, 1])
+                            with act_c1:
+                                buf = BytesIO()
+                                g_img.save(buf, format="PNG")
+                                st.download_button(
+                                    label="Download",
+                                    data=buf.getvalue(),
+                                    file_name=f"ella_shoot_{idx}.png",
+                                    mime="image/png",
+                                    key=f"dl_{idx}",
+                                    use_container_width=True
+                                )
+                            with act_c2:
+                                if st.button("🗑", key=f"del_gal_{item['id']}", help="Remove", use_container_width=True):
+                                    db.delete_gallery_item(item['id'])
+                                    st.rerun()
+    else:
+        st.info("No shoots in portfolio yet.")
+
+    # Chatbot section
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    with st.expander("CRUELLA 💬", expanded=False):
+        st.caption("Your Creative Director")
+        
+        # helper for Ella
+        context_str = "Context: "
+        context_str += f"Current Model is {selected_model['name'] if selected_model else 'None'}. "
+        context_str += f"Wearing {selected_apparel['name'] if selected_apparel else 'None'}. "
+        context_str += f"Location is {selected_location['name'] if selected_location else 'None'}."
+        
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
+
+        # Display Chat History with "Auto-Minimize" logic
+        msgs = st.session_state.messages
+        
+        if len(msgs) > 2:
+            # History (Collapsed)
+            with st.expander("Previous Consultations", expanded=False):
+                for m in msgs[:-2]:
+                    with st.chat_message(m["role"]):
+                        st.markdown(m["content"])
+            # Latest (Visible)
+            for m in msgs[-2:]:
+                with st.chat_message(m["role"]):
+                    st.markdown(m["content"])
         else:
-            with st.spinner("Compiling scene..."):
-                try:
-                    # 1. Image preparation & Optimization
-                    # Using global load_and_resize
-                    model_face_img = None
-                    model_body_img = None
-                    
-                    if selected_model:
-                        if 'face_base64' in selected_model and 'body_base64' in selected_model:
-                             # Generation needs slightly larger limits (800 or 1024)
-                             model_face_img = load_and_resize(selected_model['face_base64'], (800, 800))
-                             model_body_img = load_and_resize(selected_model['body_base64'], (800, 800))
-                        elif 'image_base64' in selected_model:
-                             # Legacy fallback
-                             model_body_img = load_and_resize(selected_model['image_base64'], (800, 800))
-                    
-                    apparel_img = load_and_resize(selected_apparel['image_base64'], (800, 800))
-                    location_img = load_and_resize(selected_location['image_base64'], (800, 800)) if selected_location else None
+            # Show all if short
+            for m in msgs:
+                with st.chat_message(m["role"]):
+                    st.markdown(m["content"])
 
-                    # Construct Payload
-                    final_prompt_optimized = PromptGenerator.generate_payload(
-                        user_input=user_prompt,
-                        style=selected_style,
-                        aspect_ratio=selected_ar,
-                        use_custom_location=bool(selected_location)
+        if prompt := st.chat_input("Ask Cruella for perfection..."):
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
+
+            with st.chat_message("assistant"):
+                if client:
+                    try:
+                        # Cruella Persona prompt
+                        chat_sys_instruct = f"""
+    You are Cruella, the Head of Creative Direction for Ella Studio.
+
+    CORE RULE: Do NOT ask for camera settings or lighting technicalities. The system now handles 4K resolution, 50mm lens, and lighting automatically.
+
+    Your Job:
+    1. Critique the user's input.
+    2. Classify their idea into one of our styles: {', '.join([s.name for s in BrandStyle])}.
+    3. Rewrite their prompt to focus ONLY on the clothing texture, drape, and model attitude.
+
+    Output Format:
+    Provide a single code block labelled "THE VISION" containing the refined description.
+
+    Context: {context_str}
+    """
+                        
+                        chat_contents = [prompt]
+                        
+                        if selected_model:
+                            # Handle Dual Ref vs Legacy
+                            if 'face_base64' in selected_model:
+                                 # Use smaller 512px for chat context
+                                 m_img = load_and_resize(selected_model['face_base64'], (512, 512))
+                            elif 'image_base64' in selected_model:
+                                 m_img = load_and_resize(selected_model['image_base64'], (512, 512))
+                            else:
+                                 m_img = None
+                            
+                            if m_img: chat_contents.append(m_img)
+
+                        if selected_apparel:
+                            a_img = load_and_resize(selected_apparel['image_base64'], (512, 512))
+                            if a_img: chat_contents.append(a_img)
+
+                        if selected_location:
+                            l_img = load_and_resize(selected_location['image_base64'], (512, 512))
+                            if l_img: chat_contents.append(l_img)
+
+                        with st.spinner("Cruella is judging you..."):
+                            chat_resp = client.models.generate_content(
+                                model='gemini-3-pro-preview',
+                                contents=chat_contents,
+                                config=types.GenerateContentConfig(
+                                    system_instruction=chat_sys_instruct
+                                )
+                            )
+                        response_text = chat_resp.text
+                        st.markdown(response_text)
+                        st.session_state.messages.append({"role": "assistant", "content": response_text})
+                        st.rerun() 
+                    except Exception as e:
+                        st.error(f"Cruella is unavailable: {e}")
+                else:
+                    st.write("Cruella is disconnected (Check API Key).")
+
+with main_tab2:
+    st.markdown("### ACCESSORY STUDIO")
+    st.markdown("Add Jewelry, Bags, or Shoes to your generated shoots.")
+    
+    # 1. Select Base from Main Gallery
+    main_gallery = db.get_gallery(st.session_state.user_id, 'apparel')
+    
+    col_base, col_acc = st.columns(2)
+    
+    selected_shoot_base64 = None
+    
+    with col_base:
+        st.markdown("#### 1. Select Base Shoot")
+        if not main_gallery:
+            st.info("No shoots available. Go to Apparel Shoot tab first.")
+        else:
+            # Create friendly labels
+            shoot_options = {f"Shoot {i+1} ({item['timestamp'][:10]})": i for i, item in enumerate(main_gallery)}
+            selected_option = st.selectbox("Choose Image", list(shoot_options.keys()))
+            
+            if selected_option:
+                idx = shoot_options[selected_option]
+                selected_shoot = main_gallery[idx]
+                selected_shoot_base64 = selected_shoot['image_base64']
+                
+                # Preview
+                base_img = base64_to_image(selected_shoot_base64)
+                if base_img:
+                    st.image(base_img, caption="Base Image", use_container_width=True)
+
+    with col_acc:
+        st.markdown("#### 2. Add Accessory")
+        acc_desc = st.text_input("Accessory Name/Description", placeholder="E.g., Gold chunky necklace, Leather handbag")
+        st.caption("📷 Best: Transparent PNG or White Background. High res (1000px+).")
+        acc_file = st.file_uploader("Upload Item", type=['png', 'jpg', 'jpeg'], key="acc_upload")
+        
+        acc_image = None
+        if acc_file:
+            acc_image = Image.open(acc_file)
+            st.image(acc_image, caption="Accessory Ref", width=200)
+
+    st.markdown("---")
+    
+    if st.button("APPLY ACCESSORY", use_container_width=True):
+        if not selected_shoot_base64 or not acc_image or not acc_desc:
+            st.error("Missing inputs. Select a shoot, upload an accessory, and describe it.")
+        elif not client:
+             st.error("AI Client not initialized.")
+        else:
+            with st.spinner(" fusing accessory..."):
+                try:
+                    # Prepare inputs
+                    base_pil = base64_to_image(selected_shoot_base64)
+                    
+                    # Construct Prompt via Engine
+                    acc_prompt = PromptGenerator.generate_accessory_payload(
+                        base_desc="Existing fashion shoot",
+                        accessory_desc=acc_desc
                     )
                     
-                    # Strict fidelity mapping
-                    final_prompt_optimized += "\n\nVISUAL INPUT MAPPING (FIDELITY CHECK):"
-                    img_count = 1
+                    contents = [acc_prompt, base_pil, acc_image]
                     
-                    if model_face_img:
-                        final_prompt_optimized += f"\n- Image {img_count}: MODEL FACE REF. PRIORITY: CRITICAL. You MUST carbon-copy this person's facial features. Do NOT alter ethnicity, age, or bone structure. No 'beautification' filters."
-                        img_count += 1
-                    
-                    if model_body_img:
-                        final_prompt_optimized += f"\n- Image {img_count}: MODEL BODY REF. Use this for body proportions and pose. Ensure natural anatomical connection to the head."
-                        img_count += 1
-                        
-                    if apparel_img:
-                        final_prompt_optimized += f"\n- Image {img_count}: APPAREL REF. PRIORITY: MAXIMUM logic. DO NOT REDESIGN. The texture, pattern, and cut must be identical to this image. Drape it naturally on the model, but do not 'improve' the design."
-                        img_count += 1
-                    if location_img:
-                        final_prompt_optimized += f"\n- Image {img_count}: LOCATION REF. Use this background. Integrate the subject with matching lighting and shadows."
-                        img_count += 1
-                    
-                    final_prompt_optimized += "\n\nFINAL INSTRUCTION: NATURAL CONSISTENCY ALL THE TIME."
-                    final_prompt_optimized += "\n1. The Reference Face MUST match the Output Face."
-                    final_prompt_optimized += "\n2. The Reference Apparel MUST match the Output Apparel."
-                    final_prompt_optimized += "\n3. Lighting must be coherent across Model, Clothes, and Background."
-
-                    # 3. Request
-                    # Input list for the model (Text + Images)
-                    contents = [final_prompt_optimized]
-                    if model_face_img: contents.append(model_face_img)
-                    if model_body_img: contents.append(model_body_img)
-                    if apparel_img: contents.append(apparel_img)
-                    if location_img: contents.append(location_img)
-
-                    # Call API
                     response = client.models.generate_content(
                         model='gemini-3-pro-image-preview',
                         contents=contents,
-                        config=types.GenerateContentConfig(
+                         config=types.GenerateContentConfig(
                             safety_settings=[types.SafetySetting(
                                 category="HARM_CATEGORY_DANGEROUS_CONTENT",
                                 threshold="BLOCK_ONLY_HIGH"
@@ -551,217 +830,101 @@ with act_col:
                         )
                     )
                     
-                    # Process response (Gemini 3 returns image in parts)
-                    generated_pil = None
-                    
+                    # Handle Response
+                    final_acc_pil = None
                     if response.parts:
-                        for part in response.parts:
-                            if part.inline_data:
-                                try:
-                                    if isinstance(part.inline_data.data, bytes):
-                                        generated_pil = Image.open(BytesIO(part.inline_data.data))
-                                    else:
-                                        # Decode base64 if needed
-                                        image_data = base64.b64decode(part.inline_data.data)
-                                        generated_pil = Image.open(BytesIO(image_data))
-                                    break
-                                except Exception as img_err:
-                                     st.error(f"Failed to decode output: {img_err}")
-                            elif hasattr(part, 'text') and part.text and "http" in part.text:
-                                st.warning("Received link instead of image: " + part.text)
+                         for part in response.parts:
+                              if part.inline_data:
+                                   if isinstance(part.inline_data.data, bytes):
+                                        final_acc_pil = Image.open(BytesIO(part.inline_data.data))
+                                   else:
+                                        final_acc_pil = Image.open(BytesIO(base64.b64decode(part.inline_data.data)))
+                                   break
                     
-                    if generated_pil:
-                        st.success("SHOOT COMPLETE")
-                        st.image(generated_pil, caption="Final Result", width="stretch")
+                    if final_acc_pil:
+                        st.success("ACCESSORY ADDED")
+                        st.image(final_acc_pil, caption="Final Result", use_container_width=True)
                         
-                        # Save to Gallery
-                        res_buffer = BytesIO()
-                        generated_pil.save(res_buffer, format="PNG")
-                        b64_res = base64.b64encode(res_buffer.getvalue()).decode('utf-8')
+                        # Save to ACCESSORIES Gallery
+                        buf = BytesIO()
+                        final_acc_pil.save(buf, format="PNG")
+                        b64_new = base64.b64encode(buf.getvalue()).decode('utf-8')
                         
-                        gallery_items = load_data("gallery")
-                        gallery_items.insert(0, asdict(GalleryItem(
-                            prompt=user_prompt,
-                            image_base64=b64_res,
-                            timestamp=datetime.now().isoformat()
-                        )))
-                        save_data("gallery", gallery_items)
+                        db.add_gallery_item(st.session_state.user_id, 'accessory', f"Accessory Add: {acc_desc}", b64_new)
+                        st.rerun()
                         
-                    else:
-                        st.error("No valid image data returned.")
-
                 except Exception as e:
-                    st.error(f"Generation failed: {str(e)}")
-
-# ---------------------------------------------------------
-# 8. THE GALLERY ("PORTFOLIO")
-# ---------------------------------------------------------
-st.markdown("---")
-# Header & Download All
-# Header & Download All
-gh_col1, gh_col2 = st.columns([3, 2])
-with gh_col1:
-    st.markdown("### PORTFOLIO ARCHIVE")
-
-gallery = load_data("gallery")
-
-with gh_col2:
-    if gallery:
-        try:
-            zip_buffer = BytesIO()
-            with zipfile.ZipFile(zip_buffer, "w") as zf:
-                for idx, item in enumerate(gallery):
-                    img_data = base64.b64decode(item['image_base64'])
-                    zf.writestr(f"shoot_{idx}_{item['timestamp'][:10]}.png", img_data)
-            
-            # Action Buttons Layout (Side by Side)
-            st.markdown("<div style='height: 5px'></div>", unsafe_allow_html=True) # visual alignment
-            dl_col, clr_col = st.columns([1, 1])
-            with dl_col:
-                st.download_button(
-                    label="Download All",
-                    data=zip_buffer.getvalue(),
-                    file_name=f"ella_portfolio_{st.session_state.studio_name}.zip",
-                    mime="application/zip",
-                    use_container_width=True
-                )
-            with clr_col:
-                if st.button("CLEAR", help="Wipe Archive", use_container_width=True):
-                    save_data("gallery", [])
-                    st.rerun()
-
-        except Exception as e:
-            st.error(f"Zip error: {e}")
-
-if gallery:
-    # SCROLLABLE GALLERY CONTAINER
-    with st.container(height=600):
-        # Grid Layout: Iterate in batches of 3
-        for i in range(0, len(gallery), 3):
-            cols = st.columns(3)
-            batch = gallery[i:i+3]
-            for j, item in enumerate(batch):
-                idx = i + j
-                with cols[j]:
-                    g_img = base64_to_image(item['image_base64'])
-                    if g_img:
-                        st.image(g_img, caption=f"{item['timestamp'][:10]}", use_container_width=True)
-                        st.caption(f"{item['prompt'][:30]}...")
-                        
-                        # Actions Row
-                        act_c1, act_c2 = st.columns([2, 1])
-                        with act_c1:
-                            buf = BytesIO()
-                            g_img.save(buf, format="PNG")
-                            st.download_button(
-                                label="Download",
-                                data=buf.getvalue(),
-                                file_name=f"ella_shoot_{idx}.png",
-                                mime="image/png",
-                                key=f"dl_{idx}",
-                                use_container_width=True
-                            )
-                        with act_c2:
-                            if st.button("🗑", key=f"del_gal_{idx}", help="Remove", use_container_width=True):
-                                gallery.pop(idx)
-                                save_data("gallery", gallery)
-                                st.rerun()
-else:
-    st.info("No shoots in portfolio yet.")
-
-# Chatbot section
-st.markdown("<br><br>", unsafe_allow_html=True)
-with st.expander("CRUELLA 💬", expanded=False):
-    st.caption("Your Creative Director")
+                    st.error(f"Failed: {e}")
     
-    # helper for Ella
-    context_str = "Context: "
-    context_str += f"Current Model is {selected_model['name'] if selected_model else 'None'}. "
-    context_str += f"Wearing {selected_apparel['name'] if selected_apparel else 'None'}. "
-    context_str += f"Location is {selected_location['name'] if selected_location else 'None'}."
-    
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+    # ---------------------------------------------------------
+    # ACCESSORY PORTFOLIO
+    # ---------------------------------------------------------
+    st.markdown("---")
+    gh_col1, gh_col2 = st.columns([3, 2])
+    with gh_col1:
+        st.markdown("### ACCESSORY ARCHIVE")
 
-    # Display Chat History with "Auto-Minimize" logic
-    msgs = st.session_state.messages
-    
-    if len(msgs) > 2:
-        # History (Collapsed)
-        with st.expander("Previous Consultations", expanded=False):
-            for m in msgs[:-2]:
-                with st.chat_message(m["role"]):
-                    st.markdown(m["content"])
-        # Latest (Visible)
-        for m in msgs[-2:]:
-            with st.chat_message(m["role"]):
-                st.markdown(m["content"])
+    acc_portfolio = db.get_gallery(st.session_state.user_id, 'accessory')
+
+    with gh_col2:
+        if acc_portfolio:
+            try:
+                zip_buffer = BytesIO()
+                with zipfile.ZipFile(zip_buffer, "w") as zf:
+                    for idx, item in enumerate(acc_portfolio):
+                        img_data = base64.b64decode(item['image_base64'])
+                        zf.writestr(f"accessory_{idx}_{item['timestamp'][:10]}.png", img_data)
+                
+                # Action Buttons
+                st.markdown("<div style='height: 5px'></div>", unsafe_allow_html=True) 
+                dl_col, clr_col = st.columns([1, 1])
+                with dl_col:
+                    st.download_button(
+                        label="Download All",
+                        data=zip_buffer.getvalue(),
+                        file_name=f"ella_accessories_{st.session_state.studio_name}.zip",
+                        mime="application/zip",
+                        use_container_width=True,
+                        key="dl_all_acc"
+                    )
+                with clr_col:
+                    if st.button("CLEAR", help="Wipe Accessories", use_container_width=True, key="clr_acc"):
+                        db.clear_gallery(st.session_state.user_id, 'accessory')
+                        st.rerun()
+
+            except Exception as e:
+                st.error(f"Zip error: {e}")
+
+    if acc_portfolio:
+        # Gallery Grid
+        with st.container(height=600):
+            for i in range(0, len(acc_portfolio), 3):
+                cols = st.columns(3)
+                batch = acc_portfolio[i:i+3]
+                for j, item in enumerate(batch):
+                    idx = i + j
+                    with cols[j]:
+                        g_img = base64_to_image(item['image_base64'])
+                        if g_img:
+                            st.image(g_img, caption=f"{item['timestamp'][:10]}", use_container_width=True)
+                            st.caption(f"{item['prompt'][:30]}...")
+                            
+                            # Actions
+                            act_c1, act_c2 = st.columns([2, 1])
+                            with act_c1:
+                                buf = BytesIO()
+                                g_img.save(buf, format="PNG")
+                                st.download_button(
+                                    label="Download",
+                                    data=buf.getvalue(),
+                                    file_name=f"ella_acc_{idx}.png",
+                                    mime="image/png",
+                                    key=f"dl_acc_{idx}",
+                                    use_container_width=True
+                                )
+                            with act_c2:
+                                if st.button("🗑", key=f"del_acc_{item['id']}", help="Remove", use_container_width=True):
+                                    db.delete_gallery_item(item['id'])
+                                    st.rerun()
     else:
-        # Show all if short
-        for m in msgs:
-            with st.chat_message(m["role"]):
-                st.markdown(m["content"])
-
-    if prompt := st.chat_input("Ask Cruella for perfection..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        with st.chat_message("assistant"):
-            if client:
-                try:
-                    # Cruella Persona prompt
-                    chat_sys_instruct = f"""
-You are Cruella, the Head of Creative Direction for Ella Studio.
-
-CORE RULE: Do NOT ask for camera settings or lighting technicalities. The system now handles 4K resolution, 50mm lens, and lighting automatically.
-
-Your Job:
-1. Critique the user's input.
-2. Classify their idea into one of our styles: {', '.join([s.name for s in BrandStyle])}.
-3. Rewrite their prompt to focus ONLY on the clothing texture, drape, and model attitude.
-
-Output Format:
-Provide a single code block labelled "THE VISION" containing the refined description.
-
-Context: {context_str}
-"""
-                    
-                    chat_contents = [prompt]
-                    
-                    if selected_model:
-                        # Handle Dual Ref vs Legacy
-                        if 'face_base64' in selected_model:
-                             # Use smaller 512px for chat context
-                             m_img = load_and_resize(selected_model['face_base64'], (512, 512))
-                        elif 'image_base64' in selected_model:
-                             m_img = load_and_resize(selected_model['image_base64'], (512, 512))
-                        else:
-                             m_img = None
-                        
-                        if m_img: chat_contents.append(m_img)
-
-                    if selected_apparel:
-                        a_img = load_and_resize(selected_apparel['image_base64'], (512, 512))
-                        if a_img: chat_contents.append(a_img)
-
-                    if selected_location:
-                        l_img = load_and_resize(selected_location['image_base64'], (512, 512))
-                        if l_img: chat_contents.append(l_img)
-
-                    with st.spinner("Cruella is judging you..."):
-                        chat_resp = client.models.generate_content(
-                            model='gemini-3-pro-preview',
-                            contents=chat_contents,
-                            config=types.GenerateContentConfig(
-                                system_instruction=chat_sys_instruct
-                            )
-                        )
-                    response_text = chat_resp.text
-                    st.markdown(response_text)
-                    st.session_state.messages.append({"role": "assistant", "content": response_text})
-                    st.rerun() 
-                except Exception as e:
-                    st.error(f"Cruella is unavailable: {e}")
-            else:
-                st.write("Cruella is disconnected (Check API Key).")
+        st.info("No accessory shoots yet.")

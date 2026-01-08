@@ -50,3 +50,15 @@ class PromptGenerator:
             f"Style Guide: {style_text} "
             f"Exclude: {PromptGenerator.NEGATIVE_PROMPT}"
         )
+
+    @staticmethod
+    def generate_accessory_payload(base_desc: str, accessory_desc: str) -> str:
+        return (
+            f"STRICT INSTRUCTION: Image Editing / Object Insertion. "
+            f"Base Context: {base_desc}. "
+            f"Task: Add the following accessory to the model: {accessory_desc}. "
+            f"Requirements: 1. The accessory must look photorealistic and chemically bonded to the image (lighting, shadows, reflections). "
+            f"2. DO NOT change the Model's face or the original dress. "
+            f"3. High Fidelity Texture: Ensure gold looks like gold, leather looks like leather. "
+            f"Output: A final composited e-commerce shot."
+        )
