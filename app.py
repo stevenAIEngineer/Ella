@@ -361,7 +361,7 @@ def render_asset_tab(tab_name, category_code, label_singular):
 
 render_model_tab(tab_models)
 render_asset_tab(tab_apparel, "closet", "Apparel")
-render_asset_tab(tab_locations, "locations", "Location")
+render_asset_tab(tab_locations, "location", "Location")
 
 # Main Interface
 st.title("ELLA STUDIO")
