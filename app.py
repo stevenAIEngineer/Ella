@@ -454,9 +454,36 @@ user_prompt = st.text_area("Enter your vision...", height=100, placeholder="E.g.
 # Layout: Left (Inputs/Settings) | Center (Action) | Right (Output) - Simplified
 # Redesigning Generation Row for Aspect Ratio & Resolution
 st.markdown("### SHOOT SETTINGS")
-set_col1, set_col2, act_col = st.columns([1, 1, 1])
+set_col1, set_col2, set_col3, act_col = st.columns([1, 1, 1, 1])
+
+# BRAND STYLES DEFINITION
+BRAND_STYLES = {
+    "Minimalist / Zara (Clean)": """
+    Environment: Infinite white cyclorama background, clean studio floor. 
+    Lighting: Softbox studio lighting, even illumination, neutral white balance, no harsh shadows. 
+    Pose: Neutral standing pose, arms relaxed, looking at camera, bored expression.
+    """,
+    "Urban / Streetwear (Hype)": """
+    Environment: Concrete wall, outdoor city street daytime, blurred depth. 
+    Lighting: Natural sunlight, slight hard shadow, high contrast. 
+    Pose: Candid walking motion, looking away, dynamic angle, streetwear aesthetic.
+    """,
+    "Luxury / Editorial (Vogue)": """
+    Environment: Dark grey textured backdrop, moody studio atmosphere. 
+    Lighting: Single spotlight, rim lighting on silhouette, dramatic contrast, warm tones. 
+    Pose: Sharp angular high-fashion pose, intense gaze, confident, elegant.
+    """,
+    "Pop / Fast Fashion (Bright)": """
+    Environment: Solid bright pastel color background (pink or yellow). 
+    Lighting: High-key lighting, overexposed brightness, vibrant colors. 
+    Pose: Cheerful, smiling, playful movement, hand on hip, energetic.
+    """
+}
 
 with set_col1:
+     brand_style = st.selectbox("Brand Style", list(BRAND_STYLES.keys()), label_visibility="collapsed")
+
+with set_col2:
      aspect_ratio = st.radio("Aspect Ratio", ["1:1 (Square)", "16:9 (Landscape)", "9:16 (Portrait)"], label_visibility="collapsed")
 
 with set_col2:
@@ -509,10 +536,29 @@ with act_col:
                     location_img = load_and_resize(selected_location['image_base64'], (800, 800)) if selected_location else None
 
                     # 2. Prompt construction
-                    # STRICT PROMPT ENGINEERING FOR CONSISTENCY
-                    final_prompt = f"STRICT INSTRUCTION: Generate a high-fashion photograph based on the following description: {user_prompt}. "
+                    # BANANA SPLIT STUDIO LOGIC
+                    
+                    # A. MASTER BASE PROMPT (The Non-Negotiable Foundation)
+                    MASTER_BASE_PROMPT = """
+                    Professional e-commerce fashion photography, full body shot. 
+                    Camera: Shot on Phase One XF IQ4, 100MP, sharp focus on fabric texture, f/8 aperture for deep depth of field. 
+                    Quality: 4k native resolution, hyper-realistic, uncompressed, sharp details, no grain.
+                    """
+                    
+                    # B. CONSTRUCTING THE PAYLOAD
+                    final_prompt = f"STRICT INSTRUCTION: {MASTER_BASE_PROMPT} "
+                    final_prompt += f"Subject Description: {user_prompt}. "
+                    
+                    # C. INJECT BRAND STYLE
+                    selected_style_prompt = BRAND_STYLES[brand_style]
+                    final_prompt += f" {selected_style_prompt} "
+
+                    # D. TECHNICAL SPECS
                     final_prompt += f" Aspect Ratio: {selected_ar}. "
                     final_prompt += f" Target Resolution: {resolution.split('(')[0].strip().upper()}. "
+
+                    # E. SAFETY NET (Negative Prompt logic injected as exclusion instruction)
+                    final_prompt += " Exclude/Avoid: cinematic lighting, dramatic shadows, artistic blur, bokeh, messy background, illustration, painting, 3d render, distorted face, extra limbs, low contrast, grain, noise, watermark, text. "
                     final_prompt += "Ensure professional editorial lighting, 8k resolution, highly detailed texture. "
                     
                     # Explicit Input Mapping
@@ -552,6 +598,19 @@ with act_col:
                     if location_img:
                         contents.append(location_img)
 
+                    # 3. Request
+                    # Input list for the model (Text + Images)
+                    # Force Aspect Ratio at the start for better adherence
+                    ar_instruction = f"Aspect Ratio: {selected_ar}."
+                    final_prompt_optimized = f"{ar_instruction} {final_prompt}"
+
+                    contents = [final_prompt_optimized]
+                    if model_face_img: contents.append(model_face_img)
+                    if model_body_img: contents.append(model_body_img)
+                    if apparel_img: contents.append(apparel_img)
+                    if location_img: contents.append(location_img)
+
+                    # Use Nano Banana Pro (Gemini 2.0 Flash Experimental)
                     response = client.models.generate_content(
                         model='gemini-3-pro-image-preview',
                         contents=contents,
