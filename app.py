@@ -529,7 +529,7 @@ with main_tab1:
     if "shot_plan" not in st.session_state:
         st.session_state.shot_plan = ["", "", ""]
 
-    if st.button("⚡ ANALYZE & PLAN SHOOT", use_container_width=True):
+    if st.button("⚡ DECONSTRUCT VISION", help="Let Cruella analyze your brief", use_container_width=True):
         if not user_prompt:
              st.error("Please enter a vision first.")
         else:

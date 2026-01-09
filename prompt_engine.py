@@ -114,32 +114,43 @@ class PromptGenerator:
     def parse_campaign_briefs(user_input: str) -> list[str]:
         """
         Returns a list of 3 raw shot descriptions (Subject/Pose only) for the UI editors.
-        Does NOT wrap them in full prompt payloads.
+        Uses regex to find specific 'Shot X' blocks to ensure correct slotting.
         """
-        briefs = []
+        import re
+        briefs = ["", "", ""] # Fixed size 3
         
-        # Check for structured input
-        if "Shot 1" in user_input and "Shot 2" in user_input:
-            import re
-            parts = re.split(r'Shot \d[:\.]?', user_input, flags=re.IGNORECASE)
-            # Filter parts
-            clean_parts = [p.strip() for p in parts if len(p.strip()) > 20]
+        # Check if basic markers exist
+        has_structure = bool(re.search(r'Shot \d', user_input, re.IGNORECASE))
+        
+        if has_structure:
+            # Robust Extraction: Find text for specific shots indepedently
+            # Pattern: "Shot X" ... (content) ... (Next "Shot" or End of String)
             
-            if len(clean_parts) >= 2:
-                for i in range(3):
-                    brief = clean_parts[i] if i < len(clean_parts) else clean_parts[-1]
-                    briefs.append(brief)
+            # Shot 1
+            m1 = re.search(r'Shot 1[:\s\.]+(.*?)(?=Shot \d|$)', user_input, re.IGNORECASE | re.DOTALL)
+            if m1: briefs[0] = m1.group(1).strip()
+            
+            # Shot 2
+            m2 = re.search(r'Shot 2[:\s\.]+(.*?)(?=Shot \d|$)', user_input, re.IGNORECASE | re.DOTALL)
+            if m2: briefs[1] = m2.group(1).strip()
+            
+            # Shot 3
+            m3 = re.search(r'Shot 3[:\s\.]+(.*?)(?=Shot \d|$)', user_input, re.IGNORECASE | re.DOTALL)
+            if m3: briefs[2] = m3.group(1).strip()
+            
+            # Fallback for "Shot 1" only cases where others might be implied or mis-numbered?
+            # For now, strict mapping is safer as requested.
+            
+            # If we found at least one structured shot, return the list.
+            # Even if Shot 2 is empty, it stays empty in the UI.
+            if any(briefs):
                 return briefs
 
         # FALLBACK: Standard Auto-Variation
-        # We generate descriptions, not full payloads
         base = user_input
-        # Shot 1
-        briefs.append(f"{base} (Standard Editorial Shot)")
-        # Shot 2
-        briefs.append(f"{base}. DYNAMIC VARIATION: Side profile, walking motion, or active stance. Distinct difference.")
-        # Shot 3
-        briefs.append(f"{base}. DETAIL SHOT: Close-up, alternative angle, or artistic crop. Focus on texture/mood.")
+        briefs[0] = f"{base}"
+        briefs[1] = f"{base}. DYNAMIC VARIATION: Side profile, walking motion, or active stance. Distinct difference."
+        briefs[2] = f"{base}. DETAIL SHOT: Close-up, alternative angle, or artistic crop. Focus on texture/mood."
         
         return briefs
 
