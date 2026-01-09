@@ -39,18 +39,25 @@ class PromptGenerator:
     )
 
     @staticmethod
-    def generate_payload(user_input: str, style: BrandStyle, aspect_ratio: str, use_custom_location: bool) -> str:
+    def generate_payload(user_input: str, style: BrandStyle, aspect_ratio: str, use_custom_location: bool, variation_idx: int = 0) -> str:
         # Override environment if custom loc
         style_text = style.prompt_modifier
         if use_custom_location:
-            # Simple heuristic to strip environment text if needed, or rely on the model to prioritize the image input.
-            # For now, we append the full style but add a strong override instruction.
+            # Simple heuristic
             style_text += " IGNORE STYLE ENVIRONMENT. USE LOCATION IMAGE BACKGROUND."
+
+        # Variation Logic
+        pose_instruction = "Standard Pose: As described in prompt."
+        if variation_idx == 1:
+            pose_instruction = "Variation 2: DYNAMIC POSE. Distinctly different from the first shot. Side profile, walking motion, or active stance. Avoid static standing."
+        elif variation_idx == 2:
+            pose_instruction = "Variation 3: ALTERNATIVE ANGLE. Close-up detail, sitting, or artistic crop. Focus on mood and texture detail."
 
         return (
             f"STRICT INSTRUCTION: {PromptGenerator.MASTER_BASE_PROMPT} "
             f"Aspect Ratio: {aspect_ratio}. "
             f"Subject: {user_input}. "
+            f"Pose Directive: {pose_instruction}. "
             f"Style Guide: {style_text} "
             f"Exclude: {PromptGenerator.NEGATIVE_PROMPT}"
         )

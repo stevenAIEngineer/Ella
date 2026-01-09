@@ -554,7 +554,7 @@ with main_tab1:
     with act_col:
         st.markdown("<div style='height: 24px'></div>", unsafe_allow_html=True) # Spacer
         if st.button("INITIATE SHOOT", use_container_width=True):
-            st.caption(f"Est: {est_cost} | {selected_ar} | {resolution.split('(')[1][:-1]}")
+            st.caption(f"Est: {est_cost}x3 | {selected_ar} | {resolution.split('(')[1][:-1]}")
             if not client:
                 st.error("AI Client not initialized.")
             elif not user_prompt:
@@ -578,93 +578,103 @@ with main_tab1:
                                  # Legacy fallback
                                  model_body_img = load_and_resize(selected_model['image_base64'], (800, 800))
                         
+                        
                         apparel_img = load_and_resize(selected_apparel['image_base64'], (800, 800))
                         location_img = load_and_resize(selected_location['image_base64'], (800, 800)) if selected_location else None
 
-                        # Construct Payload
-                        final_prompt_optimized = PromptGenerator.generate_payload(
-                            user_input=user_prompt,
-                            style=selected_style,
-                            aspect_ratio=selected_ar,
-                            use_custom_location=bool(selected_location)
-                        )
-                        
-                        # Fidelity checks
-                        final_prompt_optimized += "\\n\\nVISUAL MAPPING:"
-                        img_count = 1
-                        
-                        if model_face_img:
-                            final_prompt_optimized += f"\\n- Image {img_count}: MODEL FACE REF. PRIORITY: CRITICAL IDENTITY PRESERVATION. The output face must be indistinguishable from this reference. strict Carbon-Copy. Do NOT 'beautify', 'optimize', or 'average' the features. Maintain exact eye shape, nose structure, and facial landmarks."
-                            img_count += 1
-                        
-                        if model_body_img:
-                            final_prompt_optimized += f"\\n- Image {img_count}: MODEL BODY REF. Use this for body proportions and pose. Ensure natural anatomical connection to the head."
-                            img_count += 1
-                            
-                        if apparel_img:
-                            final_prompt_optimized += f"\\n- Image {img_count}: APPAREL REF. PRIORITY: TEXTURE & CUT FIDELITY. However, the FIT must be realistic. The fabric should fold, crease, and hang according to the model's pose and gravity. Do not make it look like a sticker. It must wrap around the 3D form."
-                            img_count += 1
-                        if location_img:
-                            final_prompt_optimized += f"\\n- Image {img_count}: LOCATION REF. Use this background. Integrate the subject with matching lighting and shadows."
-                            img_count += 1
-                        
-                        final_prompt_optimized += "\\n\\nFINAL INSTRUCTION: NATURAL CONSISTENCY ALL THE TIME."
-                        final_prompt_optimized += "\\n1. The Reference Face MUST match the Output Face."
-                        final_prompt_optimized += "\\n2. The Reference Apparel MUST match the Output Apparel."
-                        final_prompt_optimized += "\\n3. Lighting must be coherent across Model, Clothes, and Background."
+                        # Results Grid
+                        st.markdown("### SERIES RESULTS")
+                        res_cols = st.columns(3)
 
-                        # Request
-                        # Input list for the model (Text + Images)
-                        contents = [final_prompt_optimized]
-                        if model_face_img: contents.append(model_face_img)
-                        if model_body_img: contents.append(model_body_img)
-                        if apparel_img: contents.append(apparel_img)
-                        if location_img: contents.append(location_img)
+                        # Loop 3 times
+                        for i in range(3):
+                            with res_cols[i]:
+                                with st.spinner(f"Shot {i+1}/3..."):
+                                    # Construct Payload
+                                    final_prompt_optimized = PromptGenerator.generate_payload(
+                                        user_input=user_prompt,
+                                        style=selected_style,
+                                        aspect_ratio=selected_ar,
+                                        use_custom_location=bool(selected_location),
+                                        variation_idx=i
+                                    )
+                        
+                                    # Fidelity checks
+                                    final_prompt_optimized += "\\n\\nVISUAL MAPPING:"
+                                    img_count = 1
+                                    
+                                    if model_face_img:
+                                        final_prompt_optimized += f"\\n- Image {img_count}: MODEL FACE REF. PRIORITY: CRITICAL IDENTITY PRESERVATION. The output face must be indistinguishable from this reference. strict Carbon-Copy. Do NOT 'beautify', 'optimize', or 'average' the features. Maintain exact eye shape, nose structure, and facial landmarks."
+                                        img_count += 1
+                                    
+                                    if model_body_img:
+                                        final_prompt_optimized += f"\\n- Image {img_count}: MODEL BODY REF. Use this for body proportions and pose. Ensure natural anatomical connection to the head."
+                                        img_count += 1
+                                        
+                                    if apparel_img:
+                                        final_prompt_optimized += f"\\n- Image {img_count}: APPAREL REF. PRIORITY: TEXTURE & CUT FIDELITY. However, the FIT must be realistic. The fabric should fold, crease, and hang according to the model's pose and gravity. Do not make it look like a sticker. It must wrap around the 3D form."
+                                        img_count += 1
+                                    if location_img:
+                                        final_prompt_optimized += f"\\n- Image {img_count}: LOCATION REF. Use this background. Integrate the subject with matching lighting and shadows."
+                                        img_count += 1
+                                    
+                                    final_prompt_optimized += "\\n\\nFINAL INSTRUCTION: NATURAL CONSISTENCY ALL THE TIME."
+                                    final_prompt_optimized += "\\n1. The Reference Face MUST match the Output Face."
+                                    final_prompt_optimized += "\\n2. The Reference Apparel MUST match the Output Apparel."
+                                    final_prompt_optimized += "\\n3. Lighting must be coherent across Model, Clothes, and Background."
 
-                        # Call API
-                        response = client.models.generate_content(
-                            model='gemini-3-pro-image-preview',
-                            contents=contents,
-                            config=types.GenerateContentConfig(
-                                safety_settings=[types.SafetySetting(
-                                    category="HARM_CATEGORY_DANGEROUS_CONTENT",
-                                    threshold="BLOCK_ONLY_HIGH"
-                                )]
-                            )
-                        )
-                        
-                        # Process response (Gemini 3 returns image in parts)
-                        generated_pil = None
-                        
-                        if response.parts:
-                            for part in response.parts:
-                                if part.inline_data:
-                                    try:
-                                        if isinstance(part.inline_data.data, bytes):
-                                            generated_pil = Image.open(BytesIO(part.inline_data.data))
-                                        else:
-                                            # Decode base64 if needed
-                                            image_data = base64.b64decode(part.inline_data.data)
-                                            generated_pil = Image.open(BytesIO(image_data))
-                                        break
-                                    except Exception as img_err:
-                                         st.error(f"Failed to decode output: {img_err}")
-                                elif hasattr(part, 'text') and part.text and "http" in part.text:
-                                    st.warning("Received link instead of image: " + part.text)
-                        
-                        if generated_pil:
-                            st.success("SHOOT COMPLETE")
-                            st.image(generated_pil, caption="Final Result", width="stretch")
-                            
-                            # Save to Gallery
-                            res_buffer = BytesIO()
-                            generated_pil.save(res_buffer, format="PNG")
-                            b64_res = base64.b64encode(res_buffer.getvalue()).decode('utf-8')
-                            
-                            db.add_gallery_item(st.session_state.user_id, 'apparel', user_prompt, b64_res)
-                            
-                        else:
-                            st.error("No valid image data returned.")
+                                    # Request
+                                    # Input list for the model (Text + Images)
+                                    contents = [final_prompt_optimized]
+                                    if model_face_img: contents.append(model_face_img)
+                                    if model_body_img: contents.append(model_body_img)
+                                    if apparel_img: contents.append(apparel_img)
+                                    if location_img: contents.append(location_img)
+
+                                    # Call API
+                                    response = client.models.generate_content(
+                                        model='gemini-3-pro-image-preview',
+                                        contents=contents,
+                                        config=types.GenerateContentConfig(
+                                            safety_settings=[types.SafetySetting(
+                                                category="HARM_CATEGORY_DANGEROUS_CONTENT",
+                                                threshold="BLOCK_ONLY_HIGH"
+                                            )]
+                                        )
+                                    )
+                                    
+                                    # Process response (Gemini 3 returns image in parts)
+                                    generated_pil = None
+                                    
+                                    if response.parts:
+                                        for part in response.parts:
+                                            if part.inline_data:
+                                                try:
+                                                    if isinstance(part.inline_data.data, bytes):
+                                                        generated_pil = Image.open(BytesIO(part.inline_data.data))
+                                                    else:
+                                                        # Decode base64 if needed
+                                                        image_data = base64.b64decode(part.inline_data.data)
+                                                        generated_pil = Image.open(BytesIO(image_data))
+                                                    break
+                                                except Exception as img_err:
+                                                     st.error(f"Failed to decode output: {img_err}")
+                                            elif hasattr(part, 'text') and part.text and "http" in part.text:
+                                                st.warning("Received link instead of image: " + part.text)
+                                    
+                                    if generated_pil:
+                                        st.success("SHOOT COMPLETE")
+                                        st.image(generated_pil, caption=f"Shot {i+1}", use_container_width=True)
+                                        
+                                        # Save to Gallery
+                                        res_buffer = BytesIO()
+                                        generated_pil.save(res_buffer, format="PNG")
+                                        b64_res = base64.b64encode(res_buffer.getvalue()).decode('utf-8')
+                                        
+                                        db.add_gallery_item(st.session_state.user_id, 'apparel', f"{user_prompt} (Var {i+1})", b64_res)
+                                        
+                                    else:
+                                        st.error("Frame failed.")
     
                     except Exception as e:
                         st.error(f"Generation failed: {str(e)}")
@@ -795,14 +805,18 @@ with main_tab1:
 
     CORE RULE: Do NOT ask for camera settings or lighting technicalities. The system now handles 4K resolution, 50mm lens, and lighting automatically.
 
+    You are the Creative Director defining a 3-SHOT EDITORIAL SERIES.
+    
+    CORE RULE: Do NOT ask for camera settings.
+    
     Your Job:
     1. Critique the user's input.
-    2. Classify their idea into one of our styles: {', '.join([s.name for s in BrandStyle])}.
-    3. Rewrite their prompt to focus ONLY on the clothing texture, drape, and model attitude.
-
+    2. Classify idea into style: {', '.join([s.name for s in BrandStyle])}.
+    3. Rewrite the prompt to describe a cohesive fashion series (Wide, Close-up, Dynamic).
+    
     Output Format:
     Provide a single code block labelled "THE VISION" containing the refined description.
-
+    
     Context: {context_str}
     """
                         
