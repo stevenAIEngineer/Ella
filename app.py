@@ -556,6 +556,14 @@ with main_tab1:
                   # Update Main Plan (Dynamic List)
                   st.session_state.shot_plan = briefs
                   
+                  # CRITICAL FIX: Explicitly sync widget keys to ensure UI updates
+                  # Streamlit widgets with keys persist old values unless manually overwritten
+                  for i, brief_text in enumerate(briefs):
+                      st.session_state[f"shot_input_{i}"] = brief_text
+                  
+                  # Clear any stale keys if plan shrank (optional but good hygiene)
+                  # (skipping complex cleanup for now to avoid side effects, simple overwrite is enough)
+
                   status.update(label="Campaign Plan Created!", state="complete", expanded=False)
                   st.rerun()
     
