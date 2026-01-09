@@ -19,7 +19,7 @@ class BrandStyle(Enum):
         return ""
 
 class PromptGenerator:
-    # Base prompt with 50mm lens setup
+    # Standard Setup
     MASTER_BASE_PROMPT = (
         "Professional e-commerce fashion photography, wide shot, rule of thirds composition. "
         "Framing: Model is centered with visible headroom above and floor space below. "
@@ -36,7 +36,7 @@ class PromptGenerator:
 
     @staticmethod
     def generate_payload(user_input: str, style: BrandStyle, aspect_ratio: str, use_custom_location: bool) -> str:
-        # If custom location is used, we only take the Lighting/Pose from the style, not the Environment.
+        # Override environment if custom loc
         style_text = style.prompt_modifier
         if use_custom_location:
             # Simple heuristic to strip environment text if needed, or rely on the model to prioritize the image input.

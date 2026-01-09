@@ -17,17 +17,18 @@ def init_db():
     conn = get_db_connection()
     c = conn.cursor()
     
-    # 1. Users Table
+    # Users
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
+            password_hint TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
 
-    # 2. Models Table (Roster)
+    # Models
     c.execute('''
         CREATE TABLE IF NOT EXISTS models (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,24 +40,24 @@ def init_db():
         )
     ''')
 
-    # 3. Assets Table (Closet / Locations)
+    # Assets
     c.execute('''
         CREATE TABLE IF NOT EXISTS assets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
-            category TEXT NOT NULL, -- 'closet' or 'location'
+            category TEXT NOT NULL,
             name TEXT NOT NULL,
             image_base64 TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     ''')
 
-    # 4. Gallery Table (Both Apparel and Accessories)
+    # Gallery
     c.execute('''
         CREATE TABLE IF NOT EXISTS gallery (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
-            category TEXT NOT NULL, -- 'apparel' or 'accessory'
+            category TEXT NOT NULL,
             prompt TEXT,
             image_base64 TEXT NOT NULL,
             timestamp TEXT,
@@ -64,11 +65,10 @@ def init_db():
         )
     ''')
     
-    # MIGRATION: Add password_hint column if it doesn't exist
+    # Simple migration check
     try:
         c.execute('ALTER TABLE users ADD COLUMN password_hint TEXT')
     except sqlite3.OperationalError:
-        # Column likely already exists
         pass
         
     conn.commit()

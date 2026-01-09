@@ -18,7 +18,7 @@ db.init_db()
 # Load environment variables
 load_dotenv()
 
-# App Setup
+# Config
 st.set_page_config(
     page_title="Ella Studio",
     page_icon="✨",
@@ -26,7 +26,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Session handling
+# Sessions
 if "user_id" not in st.session_state:
     st.session_state.user_id = None
 if "studio_name" not in st.session_state:
@@ -127,7 +127,7 @@ def load_and_resize(b64_str, max_size=None):
             img.thumbnail(max_size)
     return img
 
-# Initialize User DB
+# Init DB
 
 
 # GenAI Client
@@ -151,7 +151,7 @@ except ImportError:
     st.error("`google-genai` library not installed. Please install it.")
     client = None
 
-# Custom CSS
+# Styles
 st.markdown("""
 <style>
     /* IMPORT FONTS */
@@ -481,7 +481,7 @@ with main_tab1:
             else:
                 with st.spinner("Compiling scene..."):
                     try:
-                        # 1. Image preparation & Optimization
+                        # Prep Images
                         # Using global load_and_resize
                         model_face_img = None
                         model_body_img = None
@@ -506,8 +506,8 @@ with main_tab1:
                             use_custom_location=bool(selected_location)
                         )
                         
-                        # Strict fidelity mapping
-                        final_prompt_optimized += "\\n\\nVISUAL INPUT MAPPING (FIDELITY CHECK):"
+                        # Fidelity checks
+                        final_prompt_optimized += "\\n\\nVISUAL MAPPING:"
                         img_count = 1
                         
                         if model_face_img:
@@ -530,7 +530,7 @@ with main_tab1:
                         final_prompt_optimized += "\\n2. The Reference Apparel MUST match the Output Apparel."
                         final_prompt_optimized += "\\n3. Lighting must be coherent across Model, Clothes, and Background."
 
-                        # 3. Request
+                        # Request
                         # Input list for the model (Text + Images)
                         contents = [final_prompt_optimized]
                         if model_face_img: contents.append(model_face_img)
@@ -586,9 +586,7 @@ with main_tab1:
                     except Exception as e:
                         st.error(f"Generation failed: {str(e)}")
 
-    # ---------------------------------------------------------
-    # 8. THE GALLERY ("PORTFOLIO")
-    # ---------------------------------------------------------
+    # Gallery
     st.markdown("---")
     # Header & Download All
     gh_col1, gh_col2 = st.columns([3, 2])
