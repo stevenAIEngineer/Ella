@@ -524,22 +524,28 @@ with main_tab1:
     # -- Input & Settings --
     st.markdown("### CREATIVE BRIEF")
     user_prompt = st.text_area("Enter your vision...", height=100, placeholder="E.g., High fashion portrait, dynamic pose, moody lighting...")
+    ref_image = st.file_uploader("Moodboard (Optional)", type=['png', 'jpg', 'jpeg'], key="cruella_ref")
     
     # Session State for Planned Shots
     if "shot_plan" not in st.session_state:
         st.session_state.shot_plan = ["", "", ""]
 
-    if st.button("⚡ DECONSTRUCT VISION", help="Let Cruella analyze your brief", use_container_width=True):
-        if not user_prompt:
-             st.error("Please enter a vision first.")
+    if st.button("✨ AUTO-PLAN CAMPAIGN (Cruella Mode)", help="Let Cruella analyze your brief & moodboard", use_container_width=True):
+        if not user_prompt and not ref_image:
+             st.error("Please enter a vision or upload a moodboard.")
         else:
              with st.status("Cruella is analyzing your vision...", expanded=True) as status:
-                  st.write("Reading creative brief...")
-                  st.write("Designing 3-shot campaign structure...")
+                  st.write("Reading brief & analyzing visuals...")
+                  st.write("Designing high-fashion campaign structure...")
+                  
+                  # Handle Image
+                  pil_image = None
+                  if ref_image:
+                      pil_image = Image.open(ref_image)
                   
                   # New ShotListGenerator Logic
                   try:
-                      generated_shots = ShotListGenerator.generate_shot_list(client, user_prompt, min_count=3)
+                      generated_shots = ShotListGenerator.generate_shot_list(client, user_prompt, image=pil_image, min_count=3)
                   except Exception as e:
                       st.error(f"Chunking Error: {e}")
                       generated_shots = [{"description": user_prompt}] # Fallback
@@ -831,112 +837,7 @@ with main_tab1:
     else:
         st.info("No shoots in portfolio yet.")
 
-    # Chatbot section
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    with st.expander("CRUELLA 💬", expanded=False):
-        st.caption("Your Creative Director")
-        c_ref_file = st.file_uploader("Upload Inspiration (Optional)", type=['png', 'jpg', 'jpeg'], key="c_ref")
-        
-        # helper for Ella
-        context_str = "Context: "
-        context_str += f"Current Model is {selected_model['name'] if selected_model else 'None'}. "
-        context_str += f"Wearing {selected_apparel['name'] if selected_apparel else 'None'}. "
-        context_str += f"Location is {selected_location['name'] if selected_location else 'None'}."
-        
-        if "messages" not in st.session_state:
-            st.session_state.messages = []
 
-        # Display Chat History with "Auto-Minimize" logic
-        msgs = st.session_state.messages
-        
-        if len(msgs) > 2:
-            # History (Collapsed)
-            with st.expander("Previous Consultations", expanded=False):
-                for m in msgs[:-2]:
-                    with st.chat_message(m["role"]):
-                        st.markdown(m["content"])
-            # Latest (Visible)
-            for m in msgs[-2:]:
-                with st.chat_message(m["role"]):
-                    st.markdown(m["content"])
-        else:
-            # Show all if short
-            for m in msgs:
-                with st.chat_message(m["role"]):
-                    st.markdown(m["content"])
-
-        if prompt := st.chat_input("Ask Cruella for perfection..."):
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
-
-            with st.chat_message("assistant"):
-                if client:
-                    try:
-                        # Cruella Persona prompt
-                        chat_sys_instruct = f"""
-    You are Cruella, the Head of Creative Direction for Ella Studio.
-
-    CORE RULE: Do NOT ask for camera settings or lighting technicalities. The system now handles 4K resolution, 50mm lens, and lighting automatically.
-
-    You are the Creative Director defining a 3-SHOT EDITORIAL SERIES.
-    
-    CORE RULE: Do NOT ask for camera settings.
-    
-    Your Job:
-    1. Critique the user's input.
-    2. Classify idea into style: {', '.join([s.name for s in BrandStyle])}.
-    3. Rewrite the prompt to describe a cohesive fashion series (Wide, Close-up, Dynamic).
-    
-    Output Format:
-    Provide a single code block labelled "THE VISION" containing the refined description.
-    
-    Context: {context_str}
-    """
-                        
-                        chat_contents = [prompt]
-                        
-                        # Add user reference if uploaded
-                        if c_ref_file:
-                            c_img = Image.open(c_ref_file)
-                            chat_contents.append(c_img)
-                        
-                        if selected_model:
-                            # Handle Dual Ref vs Legacy
-                            if 'face_base64' in selected_model:
-                                 # Use smaller 512px for chat context
-                                 m_img = load_and_resize(selected_model['face_base64'], (512, 512))
-                            elif 'image_base64' in selected_model:
-                                 m_img = load_and_resize(selected_model['image_base64'], (512, 512))
-                            else:
-                                 m_img = None
-                            
-                            if m_img: chat_contents.append(m_img)
-
-                        if selected_apparel:
-                            a_img = load_and_resize(selected_apparel['image_base64'], (512, 512))
-                            if a_img: chat_contents.append(a_img)
-
-                        if selected_location:
-                            l_img = load_and_resize(selected_location['image_base64'], (512, 512))
-                            if l_img: chat_contents.append(l_img)
-
-                        with st.spinner("Cruella is judging you..."):
-                            chat_resp = client.models.generate_content(
-                                model='gemini-3-pro-preview',
-                                contents=chat_contents,
-                                config=types.GenerateContentConfig(
-                                    system_instruction=chat_sys_instruct
-                                )
-                            )
-                        response_text = chat_resp.text
-                        st.markdown(response_text)
-                        st.session_state.messages.append({"role": "assistant", "content": response_text})
-                        st.rerun() 
-                    except Exception as e:
-                        st.error(f"Cruella is unavailable: {e}")
-                else:
-                    st.write("Cruella is disconnected (Check API Key).")
 
 with main_tab2:
     st.markdown("### ACCESSORY STUDIO")

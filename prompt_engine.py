@@ -3,7 +3,7 @@ Author: Steven Lansangan
 """
 from enum import Enum
 import json
-from typing import List, Dict
+from typing import List, Dict, Optional, Any
 
 class BrandStyle(Enum):
     MINIMALIST = "Minimalist / Zara (Clean)"
@@ -201,48 +201,61 @@ class ShotListGenerator:
     """
     
     @staticmethod
-    def generate_shot_list(client, user_prompt: str, min_count: int = 3) -> List[Dict[str, str]]:
+    def generate_shot_list(client, user_prompt: str, image: Any = None, min_count: int = 3) -> List[Dict[str, str]]:
         """
-        Uses Gemini text model to create a JSON list of shots.
-        Dynamically determines the number of shots based on user intent (min_count to ~6).
+        Uses Gemini (Cruella Persona) to create a JSON list of high-fashion prompts.
+        Deeply analyzes the text and optional image to produce a cohesive campaign.
         """
         system_instruction = (
-            "You are an expert Fashion Photographer producing a 'Shot List'.\n"
-            "Task: Break the user's concept into a complete fashion campaign.\n"
-            "Requirements:\n"
-            f"1. QUANTITY: Generate AT LEAST {min_count} shots. If the user's brief contains more specific ideas/scenes, generate a shot for EACH one (up to 8).\n"
-            "2. Variety: Vary the camera angles (Wide, Medium, Close-up, Low angle).\n"
-            "3. Poses: Ensure each shot has a distinct, active pose (Walking, Sitting, Leaning, Dynamic).\n"
-            "4. Consistency: Keep the same model and clothing description, just change the action/framing.\n\n"
-            "Output: Strictly valid JSON list of objects. No markdown formatting.\n"
+            "You are Cruella, the uncompromising, visionary High-Fashion Creative Director. "
+            "Your Task: Analyze the user's raw concept (and moodboard if provided) and EXECUTE a high-end fashion campaign. "
+            "Process:\n"
+            "1. VISION UPGRADE: Elevate the user's basic idea into a Vogue/Numero editorial concept. Add sophisticated lighting, texture, and mood details.\n"
+            "2. DECONSTRUCTION: Break this elevated concept into a dynamic shot list.\n"
+            f"3. QUANTITY: Generate AT LEAST {min_count} shots. If the concept is complex, generate more (up to 8).\n"
+            "4. VARIETY: Ensure a mix of wide shots, dynamic motion, and textural details.\n\n"
+            "Output Requirement: Strictly valid JSON list of objects.\n"
             "Format:\n"
-            "[\n    {\"title\": \"The Walk\", \"description\": \"Full body shot...\"},\n    {\"title\": \"The Detail\", \"description\": \"Close-up shot...\"}\n]"
+            "[\n"
+            "  {\"title\": \"The Hero Shot\", \"description\": \"[Full Stable Diffusion Prompt] Professional fashion photography...\"},\n"
+            "  {\"title\": \"The Detail\", \"description\": \"[Full Stable Diffusion Prompt] Extreme close-up...\"}\n"
+            "]\n"
+            "IMPORTANT: The 'description' must be the RAW PROMPT ready for generation, including tech specs (Phase One XF, 100MP, etc) if not provided by the system."
         )
         
         try:
+            # Build content list for Multimodal
+            input_content = [f"User Concept: {user_prompt}\nTarget: Dynamic Campaign (Min {min_count} shots)"]
+            if image:
+                input_content.append("Moodboard/Reference Image:")
+                input_content.append(image)
+
             # Note: client is likely the Google GenAI Module or Client object
             # Adapting to standard Google GenAI SDK usage if client = genai
             if hasattr(client, 'models') and hasattr(client.models, 'generate_content'):
                  # Vertex AI style or specific wrapper
                  response = client.models.generate_content(
                     model='gemini-3-pro-preview',
-                    contents=f"User Concept: {user_prompt}\nTarget: Dynamic Campaign (Min {min_count} shots)",
+                    contents=input_content,
                     config={'response_mime_type': 'application/json', 'system_instruction': system_instruction}
                 )
             else:
                 # Standard Google Generative AI SDK style
                 # model = client.GenerativeModel(...)
-                model = client.GenerativeModel(
-                    model_name='gemini-1.5-pro', # Fallback
-                    system_instruction=system_instruction
-                )
+                
+                # Fallback Logic for Model Init
+                model_name = 'gemini-1.5-pro'
                 try: 
-                    model = client.GenerativeModel('gemini-3-pro-preview', system_instruction=system_instruction)
+                     # Check if we can init 3-pro
+                     client.GenerativeModel('gemini-3-pro-preview')
+                     model_name = 'gemini-3-pro-preview'
                 except:
-                    model = client.GenerativeModel('gemini-1.5-pro', system_instruction=system_instruction)
+                     pass
+
+                model = client.GenerativeModel(model_name, system_instruction=system_instruction)
 
                 response = model.generate_content(
-                    f"User Concept: {user_prompt}\nTarget: Dynamic Campaign (Min {min_count} shots)",
+                    input_content,
                     generation_config={'response_mime_type': 'application/json'}
                 )
 
