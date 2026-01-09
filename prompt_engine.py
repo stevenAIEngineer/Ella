@@ -203,8 +203,8 @@ class ShotListGenerator:
     @staticmethod
     def generate_shot_list(client, user_prompt: str, image: Any = None, min_count: int = 3) -> List[Dict[str, str]]:
         """
-        Uses Gemini (Cruella Persona) to create a JSON list of high-fashion prompts.
-        Deeply analyzes the text and optional image to produce a cohesive campaign.
+        Generates a structured shot list based on the user's concept.
+        Utilizes the Creative Director persona to analyze text and visuals.
         """
         system_instruction = (
             "You are Cruella, the uncompromising, visionary High-Fashion Creative Director. "
@@ -230,8 +230,8 @@ class ShotListGenerator:
                 input_content.append("Moodboard/Reference Image:")
                 input_content.append(image)
 
-            # Note: client is likely the Google GenAI Module or Client object
-            # Adapting to standard Google GenAI SDK usage if client = genai
+            # Prepare multimodal payload
+            # Client abstraction wrapper
             if hasattr(client, 'models') and hasattr(client.models, 'generate_content'):
                  # Vertex AI style or specific wrapper
                  response = client.models.generate_content(
@@ -266,8 +266,8 @@ class ShotListGenerator:
             
             return json.loads(raw)
             
-        except Exception as e:
-            print(f"Chunking failed: {e}")
+            except Exception as e:
+                print(f"Planning failed: {e}")
             # Fallback
             return [
                 {"title": "Standard Front", "description": f"Standard front view. {user_prompt}"},

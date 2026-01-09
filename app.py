@@ -543,11 +543,11 @@ with main_tab1:
                   if ref_image:
                       pil_image = Image.open(ref_image)
                   
-                  # New ShotListGenerator Logic
+                  # Campaign Planning Execution
                   try:
                       generated_shots = ShotListGenerator.generate_shot_list(client, user_prompt, image=pil_image, min_count=3)
                   except Exception as e:
-                      st.error(f"Chunking Error: {e}")
+                      st.error(f"Planning Error: {e}")
                       generated_shots = [{"description": user_prompt}] # Fallback
                   
                   # Extract descriptions for the text areas
