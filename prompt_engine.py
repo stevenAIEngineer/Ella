@@ -1,3 +1,6 @@
+"""
+Author: Steven Lansangan
+"""
 from enum import Enum
 
 class BrandStyle(Enum):

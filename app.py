@@ -1,3 +1,7 @@
+"""
+Ella Studio
+Author: Steven Lansangan
+"""
 import streamlit as st
 import os
 import json
@@ -289,6 +293,7 @@ with st.sidebar.expander("ADMIN CONSOLE", expanded=False):
         st.info("No users yet.")
 
 st.sidebar.markdown("---")
+st.sidebar.caption("© 2025 Steven Lansangan")
 
 tab_models, tab_apparel, tab_locations = st.sidebar.tabs(["MODELS", "APPAREL", "LOCATIONS"])
 

@@ -1,3 +1,6 @@
+"""
+Author: Steven Lansangan
+"""
 import sqlite3
 import os
 import bcrypt
