@@ -266,8 +266,8 @@ class ShotListGenerator:
             
             return json.loads(raw)
             
-            except Exception as e:
-                print(f"Planning failed: {e}")
+        except Exception as e:
+            print(f"Planning failed: {e}")
             # Fallback
             return [
                 {"title": "Standard Front", "description": f"Standard front view. {user_prompt}"},
