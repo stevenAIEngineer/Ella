@@ -1,6 +1,6 @@
 """
 Ella Studio
-Author: Steven Lansangan
+Developer: Steven Lansangan
 """
 import streamlit as st
 import os
@@ -130,6 +130,11 @@ def load_and_resize(b64_str, max_size=None):
         if max_size:
             img.thumbnail(max_size)
     return img
+
+@st.dialog("High Resolution Preview")
+def show_image_preview(image, prompt):
+    st.image(image, use_container_width=True)
+    st.caption(prompt)
 
 # Init DB
 
@@ -644,8 +649,11 @@ with main_tab1:
                             st.caption(f"{item['prompt'][:30]}...")
                             
                             # Actions Row
-                            act_c1, act_c2 = st.columns([2, 1])
+                            act_c1, act_c2, act_c3 = st.columns([1, 2, 1])
                             with act_c1:
+                                if st.button("🔍", key=f"view_{item['id']}", help="Maximize"):
+                                    show_image_preview(g_img, item['prompt'])
+                            with act_c2:
                                 buf = BytesIO()
                                 g_img.save(buf, format="PNG")
                                 st.download_button(
@@ -656,7 +664,7 @@ with main_tab1:
                                     key=f"dl_{idx}",
                                     use_container_width=True
                                 )
-                            with act_c2:
+                            with act_c3:
                                 if st.button("🗑", key=f"del_gal_{item['id']}", help="Remove", use_container_width=True):
                                     db.delete_gallery_item(item['id'])
                                     st.rerun()
