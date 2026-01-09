@@ -594,7 +594,7 @@ with main_tab1:
                         img_count = 1
                         
                         if model_face_img:
-                            final_prompt_optimized += f"\\n- Image {img_count}: MODEL FACE REF. PRIORITY: CRITICAL. You MUST carbon-copy this person's facial features. Do NOT alter ethnicity, age, or bone structure. No 'beautification' filters."
+                            final_prompt_optimized += f"\\n- Image {img_count}: MODEL FACE REF. PRIORITY: CRITICAL IDENTITY PRESERVATION. The output face must be indistinguishable from this reference. strict Carbon-Copy. Do NOT 'beautify', 'optimize', or 'average' the features. Maintain exact eye shape, nose structure, and facial landmarks."
                             img_count += 1
                         
                         if model_body_img:
