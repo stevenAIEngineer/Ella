@@ -675,6 +675,7 @@ with main_tab1:
     st.markdown("<br><br>", unsafe_allow_html=True)
     with st.expander("CRUELLA 💬", expanded=False):
         st.caption("Your Creative Director")
+        c_ref_file = st.file_uploader("Upload Inspiration (Optional)", type=['png', 'jpg', 'jpeg'], key="c_ref")
         
         # helper for Ella
         context_str = "Context: "
@@ -730,6 +731,11 @@ with main_tab1:
     """
                         
                         chat_contents = [prompt]
+                        
+                        # Add user reference if uploaded
+                        if c_ref_file:
+                            c_img = Image.open(c_ref_file)
+                            chat_contents.append(c_img)
                         
                         if selected_model:
                             # Handle Dual Ref vs Legacy
