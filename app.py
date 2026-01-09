@@ -538,37 +538,32 @@ with main_tab1:
                   st.write("Designing 3-shot campaign structure...")
                   
                   # New ShotListGenerator Logic
-                  generated_shots = ShotListGenerator.generate_shot_list(client, user_prompt)
+                  generated_shots = ShotListGenerator.generate_shot_list(client, user_prompt, min_count=3)
                   
                   # Extract descriptions for the text areas
                   briefs = [shot['description'] for shot in generated_shots]
                   
-                  # Ensure we have 3
-                  while len(briefs) < 3:
-                      briefs.append(f"Shot {len(briefs)+1}: {user_prompt}")
-                  
-                  # Update Main Plan
+                  # Update Main Plan (Dynamic List)
                   st.session_state.shot_plan = briefs
                   
-                  # CRITICAL FIX: Explicitly update widget keys to refresh UI
-                  st.session_state['s1_input'] = briefs[0]
-                  st.session_state['s2_input'] = briefs[1]
-                  st.session_state['s3_input'] = briefs[2]
-                  
-                  status.update(label="Vision Deconstructed!", state="complete", expanded=False)
+                  status.update(label="Campaign Plan Created!", state="complete", expanded=False)
                   st.rerun()
     
-    # Editable Planner UI
-    st.markdown("#### SHOOT PLANNER")
-    plan_c1, plan_c2, plan_c3 = st.columns(3)
-    with plan_c1:
-         s1_text = st.text_area("Shot 1 (Hero)", value=st.session_state.shot_plan[0], height=150, key="s1_input")
-    with plan_c2:
-         s2_text = st.text_area("Shot 2 (Dynamic)", value=st.session_state.shot_plan[1], height=150, key="s2_input")
-    with plan_c3:
-         s3_text = st.text_area("Shot 3 (Detail)", value=st.session_state.shot_plan[2], height=150, key="s3_input")
+    # Editable Planner UI (Dynamic Grid)
+    st.markdown(f"#### SHOOT PLANNER ({len(st.session_state.shot_plan)} Shots)")
+    
+    # Render inputs in rows of 3
+    plan_cols = st.columns(3)
+    for i, shot_text in enumerate(st.session_state.shot_plan):
+        col_idx = i % 3
+        with plan_cols[col_idx]:
+             # We use a key based on index to fetch value. 
+             # If key exists, it overrides 'value', so we rely on session state persistence normally.
+             # But here we want to update the LIST when the TEXT AREA changes.
+             new_val = st.text_area(f"Shot {i+1}", value=shot_text, key=f"shot_input_{i}", height=120)
+             st.session_state.shot_plan[i] = new_val
 
-    final_shot_inputs = [s1_text, s2_text, s3_text]
+    # No longer need final_shot_inputs list, we use st.session_state.shot_plan directly
 
     # -- Generation Logic --
     st.markdown("### SHOOT SETTINGS")
@@ -632,17 +627,28 @@ with main_tab1:
 
                         # Results Grid
                         st.markdown("### SERIES RESULTS")
-                        res_cols = st.columns(3)
-
-                        # Pre-generation: Get payloads from EDITOR
-                        # We iterate the edited inputs directly
                         
-                        # Loop 3 times
-                        for i in range(3):
-                            with res_cols[i]:
-                                with st.spinner(f"Shot {i+1}/3..."):
+                        # Dynamic Results Grid
+                        # We'll create columns dynamically or use a wrapping logic?
+                        # Streamlit columns are fixed width row.
+                        # Let's do rows of 3.
+                        
+                        total_shots = len(st.session_state.shot_plan)
+                        cols_per_row = 3
+                        
+                        # Loop through all planned shots
+                        for i in range(total_shots):
+                            # Start a new row if needed
+                            if i % cols_per_row == 0:
+                                current_row_cols = st.columns(cols_per_row)
+                            
+                            col_idx = i % cols_per_row
+                            
+                            with current_row_cols[col_idx]:
+                                st.markdown(f"**Shot {i+1}**")
+                                with st.spinner(f"Generating..."):
                                     # Select Payload
-                                    current_brief = final_shot_inputs[i]
+                                    current_brief = st.session_state.shot_plan[i]
                                     
                                     # Skip if empty
                                     if not current_brief:

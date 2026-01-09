@@ -201,11 +201,23 @@ class ShotListGenerator:
     """
     
     @staticmethod
-    def generate_shot_list(client, user_prompt: str, count: int = 3) -> List[Dict[str, str]]:
+    def generate_shot_list(client, user_prompt: str, min_count: int = 3) -> List[Dict[str, str]]:
         """
         Uses Gemini text model to create a JSON list of shots.
+        Dynamically determines the number of shots based on user intent (min_count to ~6).
         """
-        system_instruction = f"You are an expert Fashion Photographer producing a 'Shot List'.\nTask: Break the user's concept into {count} distinct, professional fashion shots.\nRequirements:\n1. Variety: Vary the camera angles (Wide, Medium, Close-up, Low angle).\n2. Poses: Ensure each shot has a distinct, active pose (Walking, Sitting, Leaning, Dynamic).\n3. Consistency: Keep the same model and clothing description, just change the action/framing.\n\nOutput: Strictly valid JSON list of objects. No markdown formatting.\nFormat:\n[\n    {{\"title\": \"The Walk\", \"description\": \"Full body shot, model walking towards camera, dynamic movement...\"}},\n    {{\"title\": \"The Detail\", \"description\": \"Close-up shot of the upper torso, focusing on fabric texture...\"}}\n]"
+        system_instruction = (
+            "You are an expert Fashion Photographer producing a 'Shot List'.\n"
+            "Task: Break the user's concept into a complete fashion campaign.\n"
+            "Requirements:\n"
+            f"1. QUANTITY: Generate AT LEAST {min_count} shots. If the user's brief contains more specific ideas/scenes, generate a shot for EACH one (up to 8).\n"
+            "2. Variety: Vary the camera angles (Wide, Medium, Close-up, Low angle).\n"
+            "3. Poses: Ensure each shot has a distinct, active pose (Walking, Sitting, Leaning, Dynamic).\n"
+            "4. Consistency: Keep the same model and clothing description, just change the action/framing.\n\n"
+            "Output: Strictly valid JSON list of objects. No markdown formatting.\n"
+            "Format:\n"
+            "[\n    {\"title\": \"The Walk\", \"description\": \"Full body shot...\"},\n    {\"title\": \"The Detail\", \"description\": \"Close-up shot...\"}\n]"
+        )
         
         try:
             # Note: client is likely the Google GenAI Module or Client object
@@ -214,24 +226,23 @@ class ShotListGenerator:
                  # Vertex AI style or specific wrapper
                  response = client.models.generate_content(
                     model='gemini-3-pro-preview',
-                    contents=f"User Concept: {user_prompt}\nTarget Shot Count: {count}",
+                    contents=f"User Concept: {user_prompt}\nTarget: Dynamic Campaign (Min {min_count} shots)",
                     config={'response_mime_type': 'application/json', 'system_instruction': system_instruction}
                 )
             else:
                 # Standard Google Generative AI SDK style
                 # model = client.GenerativeModel(...)
                 model = client.GenerativeModel(
-                    model_name='gemini-1.5-pro', # Fallback if 3-pro not available in standard SDK registry yet or name differs
+                    model_name='gemini-1.5-pro', # Fallback
                     system_instruction=system_instruction
                 )
-                # Note: User requested gemini-3-pro-preview. If using standard SDK, we try that name.
                 try: 
                     model = client.GenerativeModel('gemini-3-pro-preview', system_instruction=system_instruction)
                 except:
                     model = client.GenerativeModel('gemini-1.5-pro', system_instruction=system_instruction)
 
                 response = model.generate_content(
-                    f"User Concept: {user_prompt}\nTarget Shot Count: {count}",
+                    f"User Concept: {user_prompt}\nTarget: Dynamic Campaign (Min {min_count} shots)",
                     generation_config={'response_mime_type': 'application/json'}
                 )
 
@@ -249,4 +260,4 @@ class ShotListGenerator:
                 {"title": "Standard Front", "description": f"Standard front view. {user_prompt}"},
                 {"title": "Side Profile", "description": f"Side profile view. {user_prompt}"},
                 {"title": "Detail Shot", "description": f"Close up detail shot. {user_prompt}"}
-            ][:count]
+            ][:min_count]
