@@ -586,18 +586,20 @@ with main_tab1:
                         st.markdown("### SERIES RESULTS")
                         res_cols = st.columns(3)
 
+                        # Pre-generation: Get 3 distinct payloads
+                        campaign_payloads = PromptGenerator.generate_campaign_payloads(
+                            user_input=user_prompt,
+                            style=selected_style,
+                            aspect_ratio=selected_ar,
+                            use_custom_location=bool(selected_location)
+                        )
+
                         # Loop 3 times
                         for i in range(3):
                             with res_cols[i]:
                                 with st.spinner(f"Shot {i+1}/3..."):
-                                    # Construct Payload
-                                    final_prompt_optimized = PromptGenerator.generate_payload(
-                                        user_input=user_prompt,
-                                        style=selected_style,
-                                        aspect_ratio=selected_ar,
-                                        use_custom_location=bool(selected_location),
-                                        variation_idx=i
-                                    )
+                                    # Select Payload
+                                    final_prompt_optimized = campaign_payloads[i]
                         
                                     # Fidelity checks
                                     final_prompt_optimized += "\\n\\nVISUAL MAPPING:"

@@ -63,6 +63,54 @@ class PromptGenerator:
         )
 
     @staticmethod
+    def generate_campaign_payloads(user_input: str, style: BrandStyle, aspect_ratio: str, use_custom_location: bool) -> list[str]:
+        """
+        Parses user_input to see if it contains structured "Shot 1", "Shot 2" etc.
+        Returns a list of 3 full prompts.
+        """
+        prompt_list = []
+        
+        # Check for structured input
+        if "Shot 1" in user_input and "Shot 2" in user_input:
+            # Simple parsing: Split by 'Shot '
+            # Note: This relies on the user format "Shot 1:", "### Shot 2", etc.
+            # We will split case-insensitive
+            import re
+            parts = re.split(r'Shot \d[:\.]?', user_input, flags=re.IGNORECASE)
+            # parts[0] might be title or empty. parts[1] is shot 1, etc.
+            
+            clean_parts = [p.strip() for p in parts if len(p.strip()) > 20] # Filter out short noise
+            
+            # If parsing fails to get at least 2 distinct parts, fallback
+            if len(clean_parts) >= 2:
+                # We aim for 3. If only 2 found, we reuse the last one.
+                for i in range(3):
+                    # Get specific brief or fallback to last known
+                    brief = clean_parts[i] if i < len(clean_parts) else clean_parts[-1]
+                    
+                    # Construct specific payload (No automatic variation injection)
+                    # We reuse generate_payload logic but bypassing the pose variation key
+                    style_text = style.prompt_modifier
+                    if use_custom_location:
+                         style_text += " IGNORE STYLE ENVIRONMENT. USE LOCATION IMAGE BACKGROUND."
+                    
+                    final = (
+                        f"STRICT INSTRUCTION: {PromptGenerator.MASTER_BASE_PROMPT} "
+                        f"Aspect Ratio: {aspect_ratio}. "
+                        f"Subject: {brief}. "
+                        f"Style Guide: {style_text} "
+                        f"Exclude: {PromptGenerator.NEGATIVE_PROMPT}"
+                    )
+                    prompt_list.append(final)
+                return prompt_list
+
+        # FALLBACK: Standard Auto-Variation
+        for i in range(3):
+            prompt_list.append(PromptGenerator.generate_payload(user_input, style, aspect_ratio, use_custom_location, variation_idx=i))
+        
+        return prompt_list
+
+    @staticmethod
     def generate_accessory_payload(base_desc: str, accessory_desc: str) -> str:
         return (
             f"STRICT INSTRUCTION: Image Editing / Object Insertion. "
