@@ -136,6 +136,79 @@ def show_image_preview(image, prompt):
     st.image(image, use_container_width=True)
     st.caption(prompt)
 
+@st.dialog("Magic Editor")
+def render_edit_dialog(image, original_prompt, category_type='apparel'):
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        st.image(image, caption="base", use_container_width=True)
+    with col2:
+        st.caption(f"Original: {original_prompt[:100]}...")
+    
+    st.markdown("#### Remix Instructions")
+    edit_instr = st.text_input("What should we change?", placeholder="E.g., Change background to a beach, Make the dress red...")
+    
+    st.markdown("#### Additional Context (Optional)")
+    ref_file = st.file_uploader("Texture/Style Ref", type=['png', 'jpg', 'jpeg'], key="edit_ref")
+    
+    if st.button("GENERATE REMIX", use_container_width=True):
+        if not edit_instr:
+            st.error("Please describe your edit.")
+            return
+
+        with st.spinner("Applying magic..."):
+             try:
+                # payload
+                final_prompt = PromptGenerator.generate_edit_payload(
+                    base_desc=original_prompt,
+                    edit_instruction=edit_instr
+                )
+                
+                contents = [final_prompt, image]
+                if ref_file:
+                    ref_img = Image.open(ref_file)
+                    contents.append(ref_img)
+                    
+                # Call API
+                if client:
+                    response = client.models.generate_content(
+                        model='gemini-3-pro-image-preview',
+                        contents=contents,
+                         config=types.GenerateContentConfig(
+                            safety_settings=[types.SafetySetting(
+                                category="HARM_CATEGORY_DANGEROUS_CONTENT",
+                                threshold="BLOCK_ONLY_HIGH"
+                            )]
+                        )
+                    )
+                    
+                    # Decode
+                    generated_pil = None
+                    if response.parts:
+                         for part in response.parts:
+                              if part.inline_data:
+                                   if isinstance(part.inline_data.data, bytes):
+                                        generated_pil = Image.open(BytesIO(part.inline_data.data))
+                                   else:
+                                        generated_pil = Image.open(BytesIO(base64.b64decode(part.inline_data.data)))
+                                   break
+                    
+                    if generated_pil:
+                         # Save
+                         res_buffer = BytesIO()
+                         generated_pil.save(res_buffer, format="PNG")
+                         b64_res = base64.b64encode(res_buffer.getvalue()).decode('utf-8')
+                         
+                         db.add_gallery_item(st.session_state.user_id, category_type, f"Remix: {edit_instr}", b64_res)
+                         st.success("Saved to Gallery!")
+                         st.rerun()
+                    else:
+                        st.error("No image returned.")
+                else:
+                    st.error("Client error.")
+
+             except Exception as e:
+                st.error(f"Error: {e}")
+
 # Init DB
 
 
@@ -649,11 +722,14 @@ with main_tab1:
                             st.caption(f"{item['prompt'][:30]}...")
                             
                             # Actions Row
-                            act_c1, act_c2, act_c3 = st.columns([1, 2, 1])
+                            act_c1, act_c2, act_c3, act_c4 = st.columns([1, 1, 2, 1])
                             with act_c1:
                                 if st.button("🔍", key=f"view_{item['id']}", help="Maximize"):
                                     show_image_preview(g_img, item['prompt'])
                             with act_c2:
+                                if st.button("✏️", key=f"edit_{item['id']}", help="Remix"):
+                                    render_edit_dialog(g_img, item['prompt'], 'apparel')
+                            with act_c3:
                                 buf = BytesIO()
                                 g_img.save(buf, format="PNG")
                                 st.download_button(
@@ -926,9 +1002,17 @@ with main_tab2:
                             st.image(g_img, caption=f"{item['timestamp'][:10]}", use_container_width=True)
                             st.caption(f"{item['prompt'][:30]}...")
                             
+                            
                             # Actions
-                            act_c1, act_c2 = st.columns([2, 1])
-                            with act_c1:
+                            act_a1, act_a2, act_a3, act_a4 = st.columns([1, 1, 2, 1])
+                            with act_a1:
+                                if st.button("🔍", key=f"view_acc_{item['id']}", help="Maximize"):
+                                    show_image_preview(g_img, item['prompt'])
+                            with act_a2:
+                                if st.button("✏️", key=f"edit_acc_{item['id']}", help="Remix"):
+                                    render_edit_dialog(g_img, item['prompt'], 'accessory')
+
+                            with act_a3:
                                 buf = BytesIO()
                                 g_img.save(buf, format="PNG")
                                 st.download_button(
@@ -939,9 +1023,10 @@ with main_tab2:
                                     key=f"dl_acc_{idx}",
                                     use_container_width=True
                                 )
-                            with act_c2:
+                            with act_a4:
                                 if st.button("🗑", key=f"del_acc_{item['id']}", help="Remove", use_container_width=True):
                                     db.delete_gallery_item(item['id'])
                                     st.rerun()
+
     else:
         st.info("No accessory shoots yet.")

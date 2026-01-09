@@ -65,4 +65,14 @@ class PromptGenerator:
             f"2. DO NOT change the Model's face or the original dress. "
             f"3. High Fidelity Texture: Ensure gold looks like gold, leather looks like leather. "
             f"Output: A final composited e-commerce shot."
+    @staticmethod
+    def generate_edit_payload(base_desc: str, edit_instruction: str) -> str:
+        return (
+            f"STRICT INSTRUCTION: Image Editing / Remix. "
+            f"Base Context: {base_desc}. "
+            f"User Edit Request: {edit_instruction}. "
+            f"Constraints: 1. KEEP the original Pose, Composition, and Lighting structure unless explicitly told to change it. "
+            f"2. Apply the user's edit naturally into the scene. "
+            f"3. Maintain high photorealism and 4k quality. "
+            f"Output: A final composited e-commerce shot."
         )
