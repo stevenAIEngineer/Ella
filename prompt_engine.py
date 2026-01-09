@@ -2,6 +2,8 @@
 Author: Steven Lansangan
 """
 from enum import Enum
+import json
+from typing import List, Dict
 
 class BrandStyle(Enum):
     MINIMALIST = "Minimalist / Zara (Clean)"
@@ -192,3 +194,59 @@ class PromptGenerator:
             f"3. Maintain high photorealism and 4k quality. "
             f"Output: A final composited e-commerce shot."
         )
+
+class ShotListGenerator:
+    """
+    Analyzes a user prompt and breaks it down into distinct, varied shots (poses/angles).
+    """
+    
+    @staticmethod
+    def generate_shot_list(client, user_prompt: str, count: int = 3) -> List[Dict[str, str]]:
+        """
+        Uses Gemini text model to create a JSON list of shots.
+        """
+        system_instruction = f"You are an expert Fashion Photographer producing a 'Shot List'.\nTask: Break the user's concept into {count} distinct, professional fashion shots.\nRequirements:\n1. Variety: Vary the camera angles (Wide, Medium, Close-up, Low angle).\n2. Poses: Ensure each shot has a distinct, active pose (Walking, Sitting, Leaning, Dynamic).\n3. Consistency: Keep the same model and clothing description, just change the action/framing.\n\nOutput: Strictly valid JSON list of objects. No markdown formatting.\nFormat:\n[\n    {{\"title\": \"The Walk\", \"description\": \"Full body shot, model walking towards camera, dynamic movement...\"}},\n    {{\"title\": \"The Detail\", \"description\": \"Close-up shot of the upper torso, focusing on fabric texture...\"}}\n]"
+        
+        try:
+            # Note: client is likely the Google GenAI Module or Client object
+            # Adapting to standard Google GenAI SDK usage if client = genai
+            if hasattr(client, 'models') and hasattr(client.models, 'generate_content'):
+                 # Vertex AI style or specific wrapper
+                 response = client.models.generate_content(
+                    model='gemini-3-pro-preview',
+                    contents=f"User Concept: {user_prompt}\nTarget Shot Count: {count}",
+                    config={'response_mime_type': 'application/json', 'system_instruction': system_instruction}
+                )
+            else:
+                # Standard Google Generative AI SDK style
+                # model = client.GenerativeModel(...)
+                model = client.GenerativeModel(
+                    model_name='gemini-1.5-pro', # Fallback if 3-pro not available in standard SDK registry yet or name differs
+                    system_instruction=system_instruction
+                )
+                # Note: User requested gemini-3-pro-preview. If using standard SDK, we try that name.
+                try: 
+                    model = client.GenerativeModel('gemini-3-pro-preview', system_instruction=system_instruction)
+                except:
+                    model = client.GenerativeModel('gemini-1.5-pro', system_instruction=system_instruction)
+
+                response = model.generate_content(
+                    f"User Concept: {user_prompt}\nTarget Shot Count: {count}",
+                    generation_config={'response_mime_type': 'application/json'}
+                )
+
+            # Parse
+            raw = response.text
+            if "```json" in raw: raw = raw.replace("```json", "").replace("```", "")
+            elif "```" in raw: raw = raw.replace("```", "")
+            
+            return json.loads(raw)
+            
+        except Exception as e:
+            print(f"Chunking failed: {e}")
+            # Fallback
+            return [
+                {"title": "Standard Front", "description": f"Standard front view. {user_prompt}"},
+                {"title": "Side Profile", "description": f"Side profile view. {user_prompt}"},
+                {"title": "Detail Shot", "description": f"Close up detail shot. {user_prompt}"}
+            ][:count]

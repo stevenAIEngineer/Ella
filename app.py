@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 import prompt_engine
 import importlib
 importlib.reload(prompt_engine) # Force reload
-from prompt_engine import PromptGenerator, BrandStyle
+from prompt_engine import PromptGenerator, BrandStyle, ShotListGenerator
 import db_manager as db
 
 # Initialize DB
@@ -536,7 +536,16 @@ with main_tab1:
              with st.status("Cruella is analyzing your vision...", expanded=True) as status:
                   st.write("Reading creative brief...")
                   st.write("Designing 3-shot campaign structure...")
-                  briefs = PromptGenerator.parse_campaign_briefs(user_input=user_prompt, client=client)
+                  
+                  # New ShotListGenerator Logic
+                  generated_shots = ShotListGenerator.generate_shot_list(client, user_prompt)
+                  
+                  # Extract descriptions for the text areas
+                  briefs = [shot['description'] for shot in generated_shots]
+                  
+                  # Ensure we have 3
+                  while len(briefs) < 3:
+                      briefs.append(f"Shot {len(briefs)+1}: {user_prompt}")
                   
                   # Update Main Plan
                   st.session_state.shot_plan = briefs
