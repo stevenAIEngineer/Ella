@@ -124,8 +124,8 @@ class PromptGenerator:
              return [user_input, f"{user_input} (Variant)", f"{user_input} (Detail)"]
 
         try:
-            # Use 1.5 Pro for logic/text extraction
-            model = client.GenerativeModel('gemini-1.5-pro') 
+            # User Change: Explicit request for gemini-3-pro-preview
+            model = client.GenerativeModel('gemini-3-pro-preview') 
             
             system_instruction = (
                 "You are Cruella, a High-Fashion Creative Director. "
