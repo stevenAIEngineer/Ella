@@ -13,7 +13,10 @@ from datetime import datetime
 from io import BytesIO
 from PIL import Image
 from dotenv import load_dotenv
-from prompt_engine import PromptGenerator, BrandStyle # Import Engine
+import prompt_engine
+import importlib
+importlib.reload(prompt_engine) # Force reload
+from prompt_engine import PromptGenerator, BrandStyle
 import db_manager as db
 
 # Initialize DB
@@ -521,6 +524,31 @@ with main_tab1:
     # -- Input & Settings --
     st.markdown("### CREATIVE BRIEF")
     user_prompt = st.text_area("Enter your vision...", height=100, placeholder="E.g., High fashion portrait, dynamic pose, moody lighting...")
+    
+    # Session State for Planned Shots
+    if "shot_plan" not in st.session_state:
+        st.session_state.shot_plan = ["", "", ""]
+
+    if st.button("⚡ ANALYZE & PLAN SHOOT", use_container_width=True):
+        if not user_prompt:
+             st.error("Please enter a vision first.")
+        else:
+             with st.spinner("Deconstructing vision..."):
+                  briefs = PromptGenerator.parse_campaign_briefs(user_input=user_prompt)
+                  st.session_state.shot_plan = briefs
+                  st.rerun()
+    
+    # Editable Planner UI
+    st.markdown("#### SHOOT PLANNER")
+    plan_c1, plan_c2, plan_c3 = st.columns(3)
+    with plan_c1:
+         s1_text = st.text_area("Shot 1 (Hero)", value=st.session_state.shot_plan[0], height=150, key="s1_input")
+    with plan_c2:
+         s2_text = st.text_area("Shot 2 (Dynamic)", value=st.session_state.shot_plan[1], height=150, key="s2_input")
+    with plan_c3:
+         s3_text = st.text_area("Shot 3 (Detail)", value=st.session_state.shot_plan[2], height=150, key="s3_input")
+
+    final_shot_inputs = [s1_text, s2_text, s3_text]
 
     # -- Generation Logic --
     st.markdown("### SHOOT SETTINGS")
@@ -586,20 +614,34 @@ with main_tab1:
                         st.markdown("### SERIES RESULTS")
                         res_cols = st.columns(3)
 
-                        # Pre-generation: Get 3 distinct payloads
-                        campaign_payloads = PromptGenerator.generate_campaign_payloads(
-                            user_input=user_prompt,
-                            style=selected_style,
-                            aspect_ratio=selected_ar,
-                            use_custom_location=bool(selected_location)
-                        )
-
+                        # Pre-generation: Get payloads from EDITOR
+                        # We iterate the edited inputs directly
+                        
                         # Loop 3 times
                         for i in range(3):
                             with res_cols[i]:
                                 with st.spinner(f"Shot {i+1}/3..."):
                                     # Select Payload
-                                    final_prompt_optimized = campaign_payloads[i]
+                                    current_brief = final_shot_inputs[i]
+                                    
+                                    # Skip if empty
+                                    if not current_brief:
+                                        st.warning("Skipped (Empty)")
+                                        continue
+
+                                    # Construct Payload manually using the brief as Subject
+                                    # We disable auto-variation since the brief is now explicit
+                                    style_text = selected_style.prompt_modifier
+                                    if selected_location:
+                                         style_text += " IGNORE STYLE ENVIRONMENT. USE LOCATION IMAGE BACKGROUND."
+                                    
+                                    final_prompt_optimized = (
+                                        f"STRICT INSTRUCTION: {PromptGenerator.MASTER_BASE_PROMPT} "
+                                        f"Aspect Ratio: {selected_ar}. "
+                                        f"Subject: {current_brief}. "
+                                        f"Style Guide: {style_text} "
+                                        f"Exclude: {PromptGenerator.NEGATIVE_PROMPT}"
+                                    )
                         
                                     # Fidelity checks
                                     final_prompt_optimized += "\\n\\nVISUAL MAPPING:"
@@ -673,7 +715,7 @@ with main_tab1:
                                         generated_pil.save(res_buffer, format="PNG")
                                         b64_res = base64.b64encode(res_buffer.getvalue()).decode('utf-8')
                                         
-                                        db.add_gallery_item(st.session_state.user_id, 'apparel', f"{user_prompt} (Var {i+1})", b64_res)
+                                        db.add_gallery_item(st.session_state.user_id, 'apparel', f"{current_brief[:100]}", b64_res)
                                         
                                     else:
                                         st.error("Frame failed.")

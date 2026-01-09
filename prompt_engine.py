@@ -111,6 +111,39 @@ class PromptGenerator:
         return prompt_list
 
     @staticmethod
+    def parse_campaign_briefs(user_input: str) -> list[str]:
+        """
+        Returns a list of 3 raw shot descriptions (Subject/Pose only) for the UI editors.
+        Does NOT wrap them in full prompt payloads.
+        """
+        briefs = []
+        
+        # Check for structured input
+        if "Shot 1" in user_input and "Shot 2" in user_input:
+            import re
+            parts = re.split(r'Shot \d[:\.]?', user_input, flags=re.IGNORECASE)
+            # Filter parts
+            clean_parts = [p.strip() for p in parts if len(p.strip()) > 20]
+            
+            if len(clean_parts) >= 2:
+                for i in range(3):
+                    brief = clean_parts[i] if i < len(clean_parts) else clean_parts[-1]
+                    briefs.append(brief)
+                return briefs
+
+        # FALLBACK: Standard Auto-Variation
+        # We generate descriptions, not full payloads
+        base = user_input
+        # Shot 1
+        briefs.append(f"{base} (Standard Editorial Shot)")
+        # Shot 2
+        briefs.append(f"{base}. DYNAMIC VARIATION: Side profile, walking motion, or active stance. Distinct difference.")
+        # Shot 3
+        briefs.append(f"{base}. DETAIL SHOT: Close-up, alternative angle, or artistic crop. Focus on texture/mood.")
+        
+        return briefs
+
+    @staticmethod
     def generate_accessory_payload(base_desc: str, accessory_desc: str) -> str:
         return (
             f"STRICT INSTRUCTION: Image Editing / Object Insertion. "
