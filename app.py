@@ -533,9 +533,12 @@ with main_tab1:
         if not user_prompt:
              st.error("Please enter a vision first.")
         else:
-             with st.spinner("Deconstructing vision..."):
-                  briefs = PromptGenerator.parse_campaign_briefs(user_input=user_prompt)
+             with st.status("Cruella is analyzing your vision...", expanded=True) as status:
+                  st.write("Reading creative brief...")
+                  st.write("Designing 3-shot campaign structure...")
+                  briefs = PromptGenerator.parse_campaign_briefs(user_input=user_prompt, client=client)
                   st.session_state.shot_plan = briefs
+                  status.update(label="Vision Deconstructed!", state="complete", expanded=False)
                   st.rerun()
     
     # Editable Planner UI

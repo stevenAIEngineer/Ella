@@ -111,48 +111,56 @@ class PromptGenerator:
         return prompt_list
 
     @staticmethod
-    def parse_campaign_briefs(user_input: str) -> list[str]:
+    def parse_campaign_briefs(user_input: str, client) -> list[str]:
         """
-        Returns a list of 3 raw shot descriptions (Subject/Pose only) for the UI editors.
-        Uses regex to find specific 'Shot X' blocks to ensure correct slotting.
+        Uses Gemini 1.5 Pro to intelligently deconstruct the user's brief into 3 distinct shots.
+        Returns a list of 3 raw shot descriptions.
         """
-        import re
-        briefs = ["", "", ""] # Fixed size 3
-        
-        # Check if basic markers exist
-        has_structure = bool(re.search(r'Shot \d', user_input, re.IGNORECASE))
-        
-        if has_structure:
-            # Robust Extraction: Find text for specific shots indepedently
-            # Pattern: "Shot X" ... (content) ... (Next "Shot" or End of String)
-            
-            # Shot 1
-            m1 = re.search(r'Shot 1[:\s\.]+(.*?)(?=Shot \d|$)', user_input, re.IGNORECASE | re.DOTALL)
-            if m1: briefs[0] = m1.group(1).strip()
-            
-            # Shot 2
-            m2 = re.search(r'Shot 2[:\s\.]+(.*?)(?=Shot \d|$)', user_input, re.IGNORECASE | re.DOTALL)
-            if m2: briefs[1] = m2.group(1).strip()
-            
-            # Shot 3
-            m3 = re.search(r'Shot 3[:\s\.]+(.*?)(?=Shot \d|$)', user_input, re.IGNORECASE | re.DOTALL)
-            if m3: briefs[2] = m3.group(1).strip()
-            
-            # Fallback for "Shot 1" only cases where others might be implied or mis-numbered?
-            # For now, strict mapping is safer as requested.
-            
-            # If we found at least one structured shot, return the list.
-            # Even if Shot 2 is empty, it stays empty in the UI.
-            if any(briefs):
-                return briefs
+        import json
+        import google.generativeai as genai
 
-        # FALLBACK: Standard Auto-Variation
-        base = user_input
-        briefs[0] = f"{base}"
-        briefs[1] = f"{base}. DYNAMIC VARIATION: Side profile, walking motion, or active stance. Distinct difference."
-        briefs[2] = f"{base}. DETAIL SHOT: Close-up, alternative angle, or artistic crop. Focus on texture/mood."
+        # If no client provided or client error, fallback
+        if not client:
+             return [user_input, f"{user_input} (Variant)", f"{user_input} (Detail)"]
+
+        try:
+            # Use 1.5 Pro for logic/text extraction
+            model = client.GenerativeModel('gemini-1.5-pro') 
+            
+            system_instruction = (
+                "You are Cruella, a High-Fashion Creative Director. "
+                "Your Task: Analyze the user's creative brief execution plan. "
+                "Output Requirement: BREAK IT DOWN into exactly 3 distinct fashion shots (Hero, Dynamic, Detail). "
+                "Rules:"
+                "1. If the user provided specific 'Shot 1/2/3' instructions, extract them exactly."
+                "2. If the user provided a vague theme, YOU MUST INVENT 3 distinct variations (Wide/Standard, Motion/Action, Close-up/Detail)."
+                "3. Output MUST be a raw JSON list of 3 strings. No markdown formatting."
+                "Example Output: [\"Shot 1 description...\", \"Shot 2 description...\", \"Shot 3 description...\"]"
+            )
+            
+            response = model.generate_content(
+                f"{system_instruction}\n\nUser Brief: {user_input}\n\nOutput the JSON list of 3 shots:",
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.7,
+                    response_mime_type="application/json"
+                )
+            )
+            
+            # Parse JSON
+            if response.text:
+                shots = json.loads(response.text)
+                if isinstance(shots, list) and len(shots) >= 3:
+                    return shots[:3] # Ensure exactly 3
+                
+        except Exception as e:
+            print(f"AI Chunking Error: {e}")
         
-        return briefs
+        # Fallback if AI fails
+        return [
+            f"{user_input}",
+            f"{user_input}. DYNAMIC VARIATION: Side profile, walking motion, or active stance.",
+            f"{user_input}. DETAIL SHOT: Close-up, alternative angle, focus on texture/mood."
+        ]
 
     @staticmethod
     def generate_accessory_payload(base_desc: str, accessory_desc: str) -> str:
