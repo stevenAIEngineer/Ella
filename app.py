@@ -538,7 +538,11 @@ with main_tab1:
                   st.write("Designing 3-shot campaign structure...")
                   
                   # New ShotListGenerator Logic
-                  generated_shots = ShotListGenerator.generate_shot_list(client, user_prompt, min_count=3)
+                  try:
+                      generated_shots = ShotListGenerator.generate_shot_list(client, user_prompt, min_count=3)
+                  except Exception as e:
+                      st.error(f"Chunking Error: {e}")
+                      generated_shots = [{"description": user_prompt}] # Fallback
                   
                   # Extract descriptions for the text areas
                   briefs = [shot['description'] for shot in generated_shots]
