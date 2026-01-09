@@ -529,7 +529,7 @@ with main_tab1:
                             img_count += 1
                             
                         if apparel_img:
-                            final_prompt_optimized += f"\\n- Image {img_count}: APPAREL REF. PRIORITY: MAXIMUM logic. DO NOT REDESIGN. The texture, pattern, and cut must be identical to this image. Drape it naturally on the model, but do not 'improve' the design."
+                            final_prompt_optimized += f"\\n- Image {img_count}: APPAREL REF. PRIORITY: TEXTURE & CUT FIDELITY. However, the FIT must be realistic. The fabric should fold, crease, and hang according to the model's pose and gravity. Do not make it look like a sticker. It must wrap around the 3D form."
                             img_count += 1
                         if location_img:
                             final_prompt_optimized += f"\\n- Image {img_count}: LOCATION REF. Use this background. Integrate the subject with matching lighting and shadows."

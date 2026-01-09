@@ -28,7 +28,8 @@ class PromptGenerator:
         "Framing: Model is centered with visible headroom above and floor space below. "
         "Anatomy: Anatomically correct proportions, natural human height, realistic body structure. "
         "Camera: Shot on Phase One XF IQ4, 100MP, 50mm lens (eye-level angle), f/8 aperture. "
-        "Quality: 4k native resolution, hyper-realistic, uncompressed, sharp details."
+        "Quality: 4k native resolution, hyper-realistic, uncompressed, sharp details. "
+        "Cloth Physics: Clothing must drape naturally over the body, respecting gravity and fabric weight. Avoid rigid or floating textures. Realistic seam interaction with the pose."
     )
 
     NEGATIVE_PROMPT = (
