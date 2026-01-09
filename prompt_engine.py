@@ -146,9 +146,16 @@ class PromptGenerator:
                 )
             )
             
+            # Clean response (Strip Markdown if present)
+            raw_text = response.text
+            if "```json" in raw_text:
+                raw_text = raw_text.replace("```json", "").replace("```", "")
+            elif "```" in raw_text:
+                 raw_text = raw_text.replace("```", "")
+
             # Parse JSON
-            if response.text:
-                shots = json.loads(response.text)
+            if raw_text:
+                shots = json.loads(raw_text.strip())
                 if isinstance(shots, list) and len(shots) >= 3:
                     return shots[:3] # Ensure exactly 3
                 

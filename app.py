@@ -537,7 +537,15 @@ with main_tab1:
                   st.write("Reading creative brief...")
                   st.write("Designing 3-shot campaign structure...")
                   briefs = PromptGenerator.parse_campaign_briefs(user_input=user_prompt, client=client)
+                  
+                  # Update Main Plan
                   st.session_state.shot_plan = briefs
+                  
+                  # CRITICAL FIX: Explicitly update widget keys to refresh UI
+                  st.session_state['s1_input'] = briefs[0]
+                  st.session_state['s2_input'] = briefs[1]
+                  st.session_state['s3_input'] = briefs[2]
+                  
                   status.update(label="Vision Deconstructed!", state="complete", expanded=False)
                   st.rerun()
     
