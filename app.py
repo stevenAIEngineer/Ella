@@ -723,12 +723,13 @@ with main_tab1:
                                     response = client.models.generate_content(
                                         model='gemini-3-pro-image-preview',
                                         contents=contents,
-                                        config=types.GenerateContentConfig(
-                                            safety_settings=[types.SafetySetting(
+                                        config={
+                                            'aspect_ratio': selected_ar, 
+                                            'safety_settings': [types.SafetySetting(
                                                 category="HARM_CATEGORY_DANGEROUS_CONTENT",
                                                 threshold="BLOCK_ONLY_HIGH"
                                             )]
-                                        )
+                                        }
                                     )
                                     
                                     # Process response (Gemini 3 returns image in parts)
